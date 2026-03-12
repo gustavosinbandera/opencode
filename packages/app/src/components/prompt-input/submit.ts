@@ -286,7 +286,13 @@ export function createPromptSubmit(input: PromptSubmitInput) {
 
       const available = await client.tool.ids().then((x) => x.data ?? []).catch(() => [])
       if (!available.includes(toolName)) {
-        const suggestions = available.filter((id) => id.includes(toolName)).slice(0, 5)
+        const typed = toolName.toLowerCase()
+        const suggestions = available
+          .filter((id) => {
+            const candidate = id.toLowerCase()
+            return candidate.includes(typed) || typed.includes(candidate)
+          })
+          .slice(0, 5)
         showToast({
           title: `Unknown tool: ${toolName}`,
           description:
