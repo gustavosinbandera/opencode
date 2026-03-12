@@ -33,8 +33,6 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
-import { Session } from "@/session"
-import { MessageV2 } from "@/session/message-v2"
 
 export type PromptProps = {
   sessionID?: string
@@ -634,8 +632,6 @@ export function Prompt(props: PromptProps) {
       return ids.filter((id) => !mcp.includes(id))
     }
 
-    const currentMode = store.mode
-
     if (inputText.startsWith("/tool ")) {
       const [, toolName = "", ...rest] = inputText.split(" ")
       const objective = rest.join(" ").trim()
@@ -796,6 +792,23 @@ export function Prompt(props: PromptProps) {
         return
       }
 
+      if (/^\d+$/.test(objective)) {
+        const result = await sdk.client.mcp
+          .callTool({
+            tool: toolName,
+            args: { work_item_id: Number(objective), mode: "compact" },
+          })
+          .then((x) => x.data)
+          .catch((error) => ({ error: error instanceof Error ? error.message : String(error) }))
+
+        toast.show({
+          variant: "info",
+          message: typeof result === "string" ? result : JSON.stringify(result, null, 2).slice(0, 4000),
+          duration: 9000,
+        })
+        return
+      }
+
       if (!objective) {
         toast.show({
           variant: "warning",
@@ -804,98 +817,6 @@ export function Prompt(props: PromptProps) {
         })
         return
       }
-
-      const numericArgs = /^\d+$/.test(objective)
-        ? { work_item_id: Number(objective), mode: "compact" }
-        : { prompt: objective }
-
-      const result = await sdk.client.mcp
-        .callTool({
-          tool: toolName,
-          args: numericArgs,
-        })
-        .then((x) => x.data as { title?: string; output?: string })
-        .catch((error) => ({ title: "MCP tool error", output: error instanceof Error ? error.message : String(error) }))
-
-      if (result?.output) {
-        const userMessage: MessageV2.User = {
-          id: Identifier.ascending("message"),
-          sessionID,
-          time: {
-            created: Date.now(),
-          },
-          role: "user",
-          agent: local.agent.current().name,
-          model: {
-            providerID: selectedModel.providerID,
-            modelID: selectedModel.modelID,
-          },
-        }
-        await Session.updateMessage(userMessage)
-        await Session.updatePart({
-          id: Identifier.ascending("part"),
-          sessionID,
-          messageID: userMessage.id,
-          type: "text",
-          text: normalized,
-          synthetic: true,
-        })
-
-        const messageID = Identifier.ascending("message")
-        const assistantMessage: MessageV2.Assistant = {
-          id: messageID,
-          sessionID,
-          parentID: userMessage.id,
-          mode: local.agent.current().name,
-          agent: local.agent.current().name,
-          role: "assistant",
-          time: {
-            created: Date.now(),
-            completed: Date.now(),
-          },
-          modelID: selectedModel.modelID,
-          providerID: selectedModel.providerID,
-          tokens: {
-            input: 0,
-            output: 0,
-            reasoning: 0,
-            cache: { read: 0, write: 0 },
-          },
-          cost: 0,
-          path: {
-            cwd: process.cwd(),
-            root: process.cwd(),
-          },
-        }
-        await Session.updateMessage(assistantMessage)
-        await Session.updatePart({
-          id: Identifier.ascending("part"),
-          sessionID,
-          messageID,
-          type: "text",
-          text: result.output,
-        })
-        props.onSubmit?.()
-        history.append({
-          ...store.prompt,
-          mode: currentMode,
-        })
-        input.extmarks.clear()
-        setStore("prompt", {
-          input: "",
-          parts: [],
-        })
-        setStore("extmarkToPartIndex", new Map())
-        input.clear()
-        return
-      }
-
-      toast.show({
-        variant: "warning",
-        message: "MCP tool returned no displayable output.",
-        duration: 4500,
-      })
-      return
 
       inputText = [
         `Use the MCP tool \`${toolName}\` to complete this objective:`,
@@ -924,6 +845,7 @@ export function Prompt(props: PromptProps) {
     const nonTextParts = store.prompt.parts.filter((part) => part.type !== "text")
 
     // Capture mode before it gets reset
+    const currentMode = store.mode
     const variant = local.model.variant.current()
 
     if (store.mode === "shell") {

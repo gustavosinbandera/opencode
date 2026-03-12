@@ -290,22 +290,7 @@ export const McpRoutes = lazy(() =>
           abortSignal: c.req.raw.signal,
           toolCallId: `mcp-call-${Date.now()}`,
         })
-        const textParts: string[] = []
-        for (const contentItem of result.content ?? []) {
-          if (contentItem.type === "text") {
-            textParts.push(contentItem.text)
-            continue
-          }
-          if (contentItem.type === "resource" && contentItem.resource?.text) {
-            textParts.push(contentItem.resource.text)
-          }
-        }
-
-        return c.json({
-          title: result.structuredContent?.title ?? "MCP tool result",
-          output: textParts.join("\n\n") || JSON.stringify(result.structuredContent ?? result, null, 2),
-          metadata: result.structuredContent ?? {},
-        })
+        return c.json(result)
       },
     ),
 )
