@@ -594,15 +594,33 @@ export function Prompt(props: PromptProps) {
       if (direct.length > 0) return direct
 
       const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
+      const prefixes = Object.keys(status)
+        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
+        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
+
+      if (prefixes.length > 0) {
+        const all = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+        const prefixed = all.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
+        if (prefixed.length > 0) return prefixed
+      }
+
       await Promise.all(
         Object.entries(status).map(async ([name, state]) => {
-          if (state.status === "failed") {
+          if (state.status !== "connected" && state.status !== "disabled") {
             await MCP.connect(name).catch(() => undefined)
           }
         }),
       )
 
-      return Object.keys(await MCP.tools().catch(() => ({})))
+      const retried = Object.keys(await MCP.tools().catch(() => ({})))
+      if (retried.length > 0) return retried
+
+      if (prefixes.length > 0) {
+        const all = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+        return all.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
+      }
+
+      return []
     }
 
     if (inputText.startsWith("/tool ")) {
