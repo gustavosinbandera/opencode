@@ -93,7 +93,7 @@ export function Autocomplete(props: {
   const [mcpToolCache, setMcpToolCache] = createSignal<string[]>([])
 
   const resolveMcpToolIDs = async () => {
-    const ids = await sdk.client.mcp.tools({ scope: "local" }).then((x) => x.data ?? []).catch(() => [])
+    const ids = await sdk.client.mcp.tools().then((x) => x.data ?? []).catch(() => [])
     if (ids.length > 0) {
       setMcpToolCache(ids)
       return ids
@@ -473,9 +473,8 @@ export function Autocomplete(props: {
       return mixed
     }
 
-    // Show a larger MCP tool window when no filter so a local server catalog remains discoverable.
     if (toolsQuery && !toolFilter) {
-      return mixed.slice(0, 80)
+      return mixed.slice(0, 10)
     }
 
     if (files.loading && prev && prev.length > 0) {
@@ -488,7 +487,7 @@ export function Autocomplete(props: {
         "description",
         (obj) => obj.aliases?.join(" ") ?? "",
       ],
-      limit: toolsQuery ? 80 : 10,
+      limit: 10,
       scoreFn: (objResults) => {
         const displayResult = objResults[0]
         let score = objResults.score

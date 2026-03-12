@@ -3017,7 +3017,6 @@ export class Mcp extends HeyApiClient {
     parameters?: {
       directory?: string
       workspace?: string
-      scope?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3028,7 +3027,6 @@ export class Mcp extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
-            { in: "query", key: "scope" },
           ],
         },
       ],
