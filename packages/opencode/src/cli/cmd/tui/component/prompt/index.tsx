@@ -24,7 +24,6 @@ import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@opencode-ai/sdk/v2"
 import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
-import { Locale } from "@/util/locale"
 import { formatDuration } from "@/util/format"
 import { createColors, createFrames } from "../../ui/spinner.ts"
 import { useDialog } from "@tui/ui/dialog"
@@ -330,6 +329,24 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
+        title: "Browse tools",
+        value: "prompt.tools",
+        category: "Prompt",
+        slash: {
+          name: "tools",
+        },
+        onSelect: (dialog) => {
+          dialog.clear()
+          input.setText("/tools")
+          setStore("prompt", {
+            input: "/tools",
+            parts: [],
+          })
+          input.gotoBufferEnd()
+          autocomplete.onInput("/tools")
+        },
+      },
+      {
         title: "Skills",
         value: "prompt.skills",
         category: "Prompt",
@@ -560,6 +577,83 @@ export function Prompt(props: PromptProps) {
 
     const messageID = Identifier.ascending("message")
     let inputText = store.prompt.input
+
+    const summarizeToolParameters = (parameters: unknown) => {
+      if (!parameters || typeof parameters !== "object") return "- none"
+      const props = (parameters as { properties?: Record<string, { description?: string }> }).properties
+      if (!props || Object.keys(props).length === 0) return "- none"
+      return Object.entries(props)
+        .slice(0, 8)
+        .map(([name, config]) => `- ${name}${config?.description ? `: ${config.description}` : ""}`)
+        .join("\n")
+    }
+
+    if (inputText.startsWith("/tool ")) {
+      const [, toolName = "", ...rest] = inputText.split(" ")
+      const objective = rest.join(" ").trim()
+
+      if (!toolName) {
+        toast.show({
+          variant: "warning",
+          message: "Tool name is required. Use /tool <tool_name> <objective>.",
+          duration: 3500,
+        })
+        return
+      }
+
+      const available = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+      if (!available.includes(toolName)) {
+        const typed = toolName.toLowerCase()
+        const suggestions = available
+          .filter((id) => {
+            const candidate = id.toLowerCase()
+            return candidate.includes(typed) || typed.includes(candidate)
+          })
+          .slice(0, 5)
+        toast.show({
+          variant: "warning",
+          message:
+            suggestions.length > 0
+              ? `Unknown tool: ${toolName}. Did you mean: ${suggestions.join(", ")}`
+              : `Unknown tool: ${toolName}. Type /tools to browse available tools.`,
+          duration: 4500,
+        })
+        return
+      }
+
+      if (objective === "--help") {
+        const details = await sdk.client.tool
+          .list({
+            provider: selectedModel.providerID,
+            model: selectedModel.modelID,
+          })
+          .then((x) => x.data ?? [])
+          .catch(() => [])
+        const selected = details.find((item) => item.id === toolName)
+        const description = selected?.description || "No dedicated help text is available for this tool."
+        const args = summarizeToolParameters(selected?.parameters)
+        toast.show({
+          message: `Tool help: ${toolName}\nDescription: ${description}\nArguments:\n${args}`,
+          duration: 6500,
+        })
+        return
+      }
+
+      if (!objective) {
+        toast.show({
+          variant: "warning",
+          message: "Tool objective is required. Use /tool <tool_name> <objective> or /tool <tool_name> --help.",
+          duration: 4500,
+        })
+        return
+      }
+
+      inputText = [
+        `Use the tool \`${toolName}\` to complete this objective:`,
+        objective,
+        "If permission is required, ask for it before execution.",
+      ].join("\n")
+    }
 
     // Expand pasted text inline before submitting
     const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
@@ -1010,9 +1104,7 @@ export function Prompt(props: PromptProps) {
               syntaxStyle={syntax()}
             />
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
-              <text fg={highlight()}>
-                {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
-              </text>
+              <text fg={highlight()}>{store.mode === "shell" ? "Shell" : "Magaya Agent"} </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>
                   <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>

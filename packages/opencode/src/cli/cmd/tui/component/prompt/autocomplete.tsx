@@ -5,6 +5,7 @@ import { firstBy } from "remeda"
 import { createMemo, createResource, createEffect, onMount, onCleanup, Index, Show, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
+import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
 import { useTheme, selectedForeground } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
@@ -76,6 +77,7 @@ export function Autocomplete(props: {
   promptPartTypeId: () => number
 }) {
   const sdk = useSDK()
+  const local = useLocal()
   const sync = useSync()
   const command = useCommandDialog()
   const { theme } = useTheme()
@@ -382,25 +384,95 @@ export function Autocomplete(props: {
     }))
   })
 
+  const [tools] = createResource(
+    () => search(),
+    async () => {
+      if (!store.visible || store.visible !== "/") return []
+
+      const model = local.model.current()
+      const providerID = model?.providerID
+      const modelID = model?.modelID
+
+      if (providerID && modelID) {
+        const detailed = await sdk.client.tool
+          .list({
+            provider: providerID,
+            model: modelID,
+          })
+          .then((x) => x.data ?? [])
+          .catch(() => undefined)
+
+        if (detailed && detailed.length > 0) {
+          return detailed
+            .map(
+              (item): AutocompleteOption => ({
+                display: `/tool ${item.id}`,
+                value: item.id,
+                description: item.description,
+                onSelect: () => {
+                  const newText = `/tool ${item.id} `
+                  const cursor = props.input().logicalCursor
+                  props.input().deleteRange(0, 0, cursor.row, cursor.col)
+                  props.input().insertText(newText)
+                  props.input().cursorOffset = Bun.stringWidth(newText)
+                },
+              }),
+            )
+            .sort((a, b) => a.display.localeCompare(b.display))
+        }
+      }
+
+      const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+      return ids
+        .map(
+          (id): AutocompleteOption => ({
+            display: `/tool ${id}`,
+            value: id,
+            onSelect: () => {
+              const newText = `/tool ${id} `
+              const cursor = props.input().logicalCursor
+              props.input().deleteRange(0, 0, cursor.row, cursor.col)
+              props.input().insertText(newText)
+              props.input().cursorOffset = Bun.stringWidth(newText)
+            },
+          }),
+        )
+        .sort((a, b) => a.display.localeCompare(b.display))
+    },
+    {
+      initialValue: [] as AutocompleteOption[],
+    },
+  )
+
   const options = createMemo((prev: AutocompleteOption[] | undefined) => {
     const filesValue = files()
     const agentsValue = agents()
     const commandsValue = commands()
+    const searchValue = search()
+
+    const toolsQuery = store.visible === "/" && searchValue.startsWith("tools")
+    const toolFilter = toolsQuery ? searchValue.replace(/^tools\s*/, "") : ""
 
     const mixed: AutocompleteOption[] =
-      store.visible === "@" ? [...agentsValue, ...(filesValue || []), ...mcpResources()] : [...commandsValue]
-
-    const searchValue = search()
+      store.visible === "@"
+        ? [...agentsValue, ...(filesValue || []), ...mcpResources()]
+        : toolsQuery
+          ? [...tools()]
+          : [...commandsValue]
 
     if (!searchValue) {
       return mixed
+    }
+
+    if (toolsQuery && !toolFilter) {
+      return mixed.slice(0, 10)
     }
 
     if (files.loading && prev && prev.length > 0) {
       return prev
     }
 
-    const result = fuzzysort.go(removeLineRange(searchValue), mixed, {
+    const result = fuzzysort.go(removeLineRange(toolsQuery ? toolFilter : searchValue), mixed, {
       keys: [
         (obj) => removeLineRange((obj.value ?? obj.display).trimEnd()),
         "description",
@@ -504,13 +576,14 @@ export function Autocomplete(props: {
       },
       onInput(value) {
         if (store.visible) {
+          const toolsMode = store.visible === "/" && value.startsWith("/tools")
           if (
             // Typed text before the trigger
             props.input().cursorOffset <= store.index ||
             // There is a space between the trigger and the cursor
-            props.input().getTextRange(store.index, props.input().cursorOffset).match(/\s/) ||
+            (!toolsMode && props.input().getTextRange(store.index, props.input().cursorOffset).match(/\s/)) ||
             // "/<command>" is not the sole content
-            (store.visible === "/" && value.match(/^\S+\s+\S+\s*$/))
+            (store.visible === "/" && value.match(/^\S+\s+\S+\s*$/) && !value.startsWith("/tools "))
           ) {
             hide()
           }
