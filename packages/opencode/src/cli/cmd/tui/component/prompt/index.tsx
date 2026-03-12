@@ -34,7 +34,6 @@ import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
 import { MCP } from "@/mcp"
-import { Config } from "@/config/config"
 
 export type PromptProps = {
   sessionID?: string
@@ -609,58 +608,33 @@ export function Prompt(props: PromptProps) {
     }
 
     const loadMcpToolIDs = async () => {
-      const config = await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))
-      const localMcpNames = Object.entries(config.mcp ?? {})
-        .filter(([, value]) => typeof value === "object" && value !== null && "type" in value && (value as any).type === "local")
-        .map(([name]) => name)
-      const localPrefixes = localMcpNames
+      const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
+      const prefixes = Object.keys(status)
         .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
         .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
-      const pickLocal = (ids: string[]) => {
-        if (localPrefixes.length === 0) return ids
-        return ids.filter((id) => localPrefixes.some((prefix) => id.startsWith(prefix)))
-      }
 
-      const direct = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
-      if (direct.length > 0) return direct
+      const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+      const fromStatus = ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
+      if (fromStatus.length > 0) return fromStatus
 
-      const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
-      const configured = Object.keys(config.mcp ?? {})
-      const candidates = [...new Set([...Object.keys(status), ...configured])]
-
-      await Promise.all(
-        candidates.map(async (name) => {
-          const state = status[name]
-          if (!state || (state.status !== "connected" && state.status !== "disabled")) {
-            await MCP.connect(name).catch(() => undefined)
-          }
-        }),
-      )
-
-      for (let i = 0; i < 3; i++) {
-        const retried = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
-        if (retried.length > 0) return retried
-        await new Promise((resolve) => setTimeout(resolve, 250))
-      }
-
-      return []
+      return Object.keys(await MCP.tools().catch(() => ({})))
     }
 
     const loadMcpDebugInfo = async () => {
-      const config = await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))
-      const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
-      const direct = Object.keys(await MCP.tools().catch(() => ({})))
-      const configured = Object.keys(config.mcp ?? {})
+      const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
+      const prefixes = Object.keys(status)
+        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
+        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
+      const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+      const direct = ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
+      const configured = Object.keys(status)
       const connected = Object.entries(status)
         .filter(([, value]) => value.status === "connected")
-        .map(([key]) => key)
-      const local = Object.entries(config.mcp ?? {})
-        .filter(([, value]) => typeof value === "object" && value !== null && "type" in value && (value as any).type === "local")
         .map(([key]) => key)
       return {
         configured,
         connected,
-        local,
+        local: configured,
         direct,
       }
     }
