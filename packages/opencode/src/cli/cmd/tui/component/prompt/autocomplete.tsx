@@ -11,8 +11,6 @@ import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
-import { MCP } from "@/mcp"
-import { Config } from "@/config/config"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 
@@ -95,48 +93,12 @@ export function Autocomplete(props: {
   const [mcpToolCache, setMcpToolCache] = createSignal<string[]>([])
 
   const resolveMcpToolIDs = async () => {
-    const config = await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))
-    const localMcpNames = Object.entries(config.mcp ?? {})
-      .filter(([, value]) => typeof value === "object" && value !== null && "type" in value && (value as any).type === "local")
-      .map(([name]) => name)
-    const localPrefixes = localMcpNames
-      .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
-      .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
-
-    const pickLocal = (ids: string[]) => {
-      if (localPrefixes.length === 0) return ids
-      return ids.filter((id) => localPrefixes.some((prefix) => id.startsWith(prefix)))
+    const ids = await sdk.client.mcp.tools({ scope: "local" }).then((x) => x.data ?? []).catch(() => [])
+    if (ids.length > 0) {
+      setMcpToolCache(ids)
+      return ids
     }
-
-    const fromRegistry = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
-    if (fromRegistry.length > 0) {
-      setMcpToolCache(fromRegistry)
-      return fromRegistry
-    }
-
-    const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
-    const configured = Object.keys(config.mcp ?? {})
-    const candidates = [...new Set([...Object.keys(status), ...configured])]
-
-    await Promise.all(
-      candidates.map(async (name) => {
-        const state = status[name]
-        if (!state || (state.status !== "connected" && state.status !== "disabled")) {
-          await MCP.connect(name).catch(() => undefined)
-        }
-      }),
-    )
-
-    for (let i = 0; i < 3; i++) {
-      const retried = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
-      if (retried.length > 0) {
-        setMcpToolCache(retried)
-        return retried
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250))
-    }
-
-    return pickLocal(mcpToolCache())
+    return mcpToolCache()
   }
 
   createEffect(() => {
@@ -436,9 +398,38 @@ export function Autocomplete(props: {
       if (!store.visible || store.visible !== "/") return []
       const ids = await resolveMcpToolIDs()
 
+      if (ids.length === 0) {
+        const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
+        const configuredNames = Object.keys(status)
+        const connectedNames = Object.entries(status)
+          .filter(([, value]) => value.status === "connected")
+          .map(([name]) => name)
+
+        return [
+          {
+            display: "No MCP tools loaded",
+            value: "__mcp_empty__",
+            description: `configured=${configuredNames.length} connected=${connectedNames.length}`,
+            disabled: true,
+          },
+          {
+            display: "Run /mcp-tools --debug",
+            value: "__mcp_debug__",
+            description: "Insert debug command to inspect MCP status",
+            onSelect: () => {
+              const newText = "/mcp-tools --debug"
+              const cursor = props.input().logicalCursor
+              props.input().deleteRange(0, 0, cursor.row, cursor.col)
+              props.input().insertText(newText)
+              props.input().cursorOffset = Bun.stringWidth(newText)
+            },
+          },
+        ]
+      }
+
       return ids
         .map(
-          (id): AutocompleteOption => ({
+          (id: string): AutocompleteOption => ({
             display: id,
             value: id,
             onSelect: () => {
@@ -450,7 +441,7 @@ export function Autocomplete(props: {
             },
           }),
         )
-        .sort((a, b) => a.display.localeCompare(b.display))
+        .sort((a: AutocompleteOption, b: AutocompleteOption) => a.display.localeCompare(b.display))
     },
     {
       initialValue: [] as AutocompleteOption[],
@@ -467,8 +458,9 @@ export function Autocomplete(props: {
     const commandsValue = commands()
     const searchValue = search()
 
-    const toolsQuery = store.visible === "/" && searchValue.startsWith("mcp-tools")
-    const toolFilter = toolsQuery ? searchValue.replace(/^mcp-tools\s*/, "") : ""
+    const toolsQuery =
+      store.visible === "/" && (searchValue.startsWith("mcp-tools") || searchValue.startsWith("tools"))
+    const toolFilter = toolsQuery ? searchValue.replace(/^(mcp-tools|tools)\s*/, "") : ""
 
     const mixed: AutocompleteOption[] =
       store.visible === "@"
@@ -481,8 +473,9 @@ export function Autocomplete(props: {
       return mixed
     }
 
+    // Show a larger MCP tool window when no filter so a local server catalog remains discoverable.
     if (toolsQuery && !toolFilter) {
-      return mixed
+      return mixed.slice(0, 80)
     }
 
     if (files.loading && prev && prev.length > 0) {
@@ -542,6 +535,14 @@ export function Autocomplete(props: {
     hide()
     selected.onSelect?.()
 
+    const text = props.input().plainText
+    if (text.startsWith("/mcp-tools") || text.startsWith("/tools")) {
+      props.setPrompt((draft) => {
+        draft.input = text
+      })
+      show("/")
+      setStore("index", 0)
+    }
   }
 
   function expandDirectory() {
@@ -575,8 +576,7 @@ export function Autocomplete(props: {
 
   function hide() {
     const text = props.input().plainText
-    const keep = text.startsWith("/mcp-tools ")
-    if (store.visible === "/" && !keep && !text.endsWith(" ") && text.startsWith("/")) {
+    if (store.visible === "/" && !text.endsWith(" ") && text.startsWith("/")) {
       const cursor = props.input().logicalCursor
       props.input().deleteRange(0, 0, cursor.row, cursor.col)
       // Sync the prompt store immediately since onContentChange is async
@@ -595,14 +595,17 @@ export function Autocomplete(props: {
       },
       onInput(value) {
         if (store.visible) {
-          const toolsMode = store.visible === "/" && value.startsWith("/mcp-tools")
+          const toolsMode = store.visible === "/" && (value.startsWith("/mcp-tools") || value.startsWith("/tools"))
           if (
             // Typed text before the trigger
             props.input().cursorOffset <= store.index ||
             // There is a space between the trigger and the cursor
             (!toolsMode && props.input().getTextRange(store.index, props.input().cursorOffset).match(/\s/)) ||
             // "/<command>" is not the sole content
-            (store.visible === "/" && value.match(/^\S+\s+\S+\s*$/) && !value.startsWith("/mcp-tools "))
+            (store.visible === "/" &&
+              value.match(/^\S+\s+\S+\s*$/) &&
+              !value.startsWith("/mcp-tools ") &&
+              !value.startsWith("/tools "))
           ) {
             hide()
           }

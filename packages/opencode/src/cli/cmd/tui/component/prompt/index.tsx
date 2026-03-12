@@ -33,8 +33,6 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
-import { MCP } from "@/mcp"
-import { Config } from "@/config/config"
 
 export type PromptProps = {
   sessionID?: string
@@ -354,6 +352,7 @@ export function Prompt(props: PromptProps) {
         category: "Prompt",
         slash: {
           name: "mcp-tools",
+          aliases: ["tools"],
         },
         onSelect: (dialog) => {
           dialog.clear()
@@ -609,41 +608,22 @@ export function Prompt(props: PromptProps) {
     }
 
     const loadMcpToolIDs = async () => {
-      const config = await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))
-      const localMcpNames = Object.entries(config.mcp ?? {})
-        .filter(([, value]) => typeof value === "object" && value !== null && "type" in value && (value as any).type === "local")
-        .map(([name]) => name)
-      const localPrefixes = localMcpNames
-        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
-        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
-      const pickLocal = (ids: string[]) => {
-        if (localPrefixes.length === 0) return ids
-        return ids.filter((id) => localPrefixes.some((prefix) => id.startsWith(prefix)))
+      return sdk.client.mcp.tools({ scope: "local" }).then((x) => (x.data ?? []) as string[]).catch(() => [] as string[])
+    }
+
+    const loadMcpDebugInfo = async () => {
+      const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
+      const direct = await sdk.client.mcp.tools({ scope: "local" }).then((x) => x.data ?? []).catch(() => [])
+      const configured = Object.keys(status)
+      const connected = Object.entries(status)
+        .filter(([, value]) => value.status === "connected")
+        .map(([key]) => key)
+      return {
+        configured,
+        connected,
+        local: configured,
+        direct,
       }
-
-      const direct = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
-      if (direct.length > 0) return direct
-
-      const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
-      const configured = Object.keys(config.mcp ?? {})
-      const candidates = [...new Set([...Object.keys(status), ...configured])]
-
-      await Promise.all(
-        candidates.map(async (name) => {
-          const state = status[name]
-          if (!state || (state.status !== "connected" && state.status !== "disabled")) {
-            await MCP.connect(name).catch(() => undefined)
-          }
-        }),
-      )
-
-      for (let i = 0; i < 3; i++) {
-        const retried = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
-        if (retried.length > 0) return retried
-        await new Promise((resolve) => setTimeout(resolve, 250))
-      }
-
-      return []
     }
 
     const loadNativeToolIDs = async () => {
@@ -711,21 +691,64 @@ export function Prompt(props: PromptProps) {
       ].join("\n")
     }
 
-    if (inputText.startsWith("/mcp-tools ")) {
-      const [, toolName = "", ...rest] = inputText.split(" ")
+    if (inputText === "/mcp-tools" || inputText === "/tools") {
+      const debug = await loadMcpDebugInfo()
+      toast.show({
+        variant: "info",
+        message: [
+          "MCP tools command",
+          "Use /mcp-tools <tool_name> <objective>",
+          "Use /mcp-tools <tool_name> --help",
+          "Use /mcp-tools --debug for diagnostics",
+          `tools loaded now: ${debug.direct.length}`,
+        ].join("\n"),
+        duration: 7000,
+      })
+      return
+    }
+
+    if (inputText.startsWith("/mcp-tools ") || inputText.startsWith("/tools ")) {
+      const normalized = inputText.startsWith("/tools ") ? inputText.replace("/tools ", "/mcp-tools ") : inputText
+      const [, toolName = "", ...rest] = normalized.split(" ")
       const objective = rest.join(" ").trim()
 
-      if (!toolName) {
+      if (toolName === "--debug") {
+        const debug = await loadMcpDebugInfo()
+        const preview = debug.direct.slice(0, 12)
         toast.show({
-          variant: "warning",
-          message: "Tool name is required. Use /mcp-tools <tool_name> <objective>.",
-          duration: 3500,
+          variant: "info",
+          message: [
+            `MCP debug`,
+            `configured: ${debug.configured.join(", ") || "none"}`,
+            `connected: ${debug.connected.join(", ") || "none"}`,
+            `local: ${debug.local.join(", ") || "none"}`,
+            `tools loaded: ${debug.direct.length}`,
+            preview.length > 0 ? `sample: ${preview.join(", ")}` : "sample: none",
+          ].join("\n"),
+          duration: 9000,
+        })
+        return
+      }
+
+      if (!toolName) {
+        const debug = await loadMcpDebugInfo()
+        toast.show({
+          variant: "info",
+          message: [
+            "MCP tools command",
+            "Use /mcp-tools <tool_name> <objective>",
+            "Use /mcp-tools <tool_name> --help",
+            "Use /mcp-tools --debug for diagnostics",
+            `tools loaded now: ${debug.direct.length}`,
+          ].join("\n"),
+          duration: 7000,
         })
         return
       }
 
       const mcpTools = await loadMcpToolIDs()
       if (!mcpTools.includes(toolName)) {
+        const debug = await loadMcpDebugInfo()
         const typed = toolName.toLowerCase()
         const suggestions = mcpTools
           .filter((id) => {
@@ -738,18 +761,27 @@ export function Prompt(props: PromptProps) {
           message:
             suggestions.length > 0
               ? `Unknown MCP tool: ${toolName}. Did you mean: ${suggestions.join(", ")}`
-              : "Unknown MCP tool. Type /mcp-tools to browse available MCP tools.",
-          duration: 4500,
+              : [
+                  `Unknown MCP tool: ${toolName}`,
+                  "Type /mcp-tools and pick from autocomplete.",
+                  `loaded tools: ${debug.direct.length}`,
+                  debug.direct.length > 0 ? `sample: ${debug.direct.slice(0, 10).join(", ")}` : "sample: none",
+                ].join("\n"),
+          duration: 9000,
         })
         return
       }
 
       if (objective === "--help") {
-        const details = (await MCP.tools().catch(() => ({}))) as Record<
-          string,
-          { description?: string; parameters?: unknown }
-        >
-        const selected = details[toolName]
+        const providerID = local.model.current()?.providerID
+        const modelID = local.model.current()?.modelID
+        const details = providerID && modelID
+          ? await sdk.client.tool
+              .list({ provider: providerID, model: modelID })
+              .then((x) => (x.data ?? []) as Array<{ id: string; description?: string; parameters?: unknown }>)
+              .catch(() => [] as Array<{ id: string; description?: string; parameters?: unknown }>)
+          : []
+        const selected = details.find((item) => item.id === toolName)
         const description = selected?.description || "No dedicated help text is available for this MCP tool."
         const args = summarizeToolParameters(selected?.parameters)
         toast.show({

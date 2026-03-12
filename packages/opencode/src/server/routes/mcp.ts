@@ -9,6 +9,38 @@ import { lazy } from "../../util/lazy"
 export const McpRoutes = lazy(() =>
   new Hono()
     .get(
+      "/tools",
+      describeRoute({
+        summary: "List MCP tool ids",
+        description: "Return MCP tool ids from the live MCP registry used by the server worker.",
+        operationId: "mcp.tools",
+        responses: {
+          200: {
+            description: "MCP tool ids",
+            content: {
+              "application/json": {
+                schema: resolver(z.array(z.string()).meta({ ref: "McpToolIDs" })),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const status = await MCP.status()
+        const localOnly = c.req.query("scope") === "local"
+        const target = Object.keys(status).filter((key) => {
+          const entry = status[key]
+          if (entry?.status !== "connected") return false
+          if (!localOnly) return true
+          return key === "usar-mcp"
+        })
+        const prefixes = target.map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
+        const ids = Object.keys(await MCP.tools())
+        const filtered = prefixes.length > 0 ? ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix))) : ids
+        return c.json(filtered)
+      },
+    )
+    .get(
       "/",
       describeRoute({
         summary: "Get MCP status",

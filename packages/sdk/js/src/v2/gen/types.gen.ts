@@ -4258,6 +4258,14 @@ export type McpStatusResponses = {
 
 export type McpStatusResponse = McpStatusResponses[keyof McpStatusResponses]
 
+export type McpToolsData = Array<string>
+
+export type McpToolsResponses = {
+  200: McpToolsData
+}
+
+export type McpToolsResponse = McpToolsResponses[keyof McpToolsResponses]
+
 export type McpAddData = {
   body?: {
     name: string
