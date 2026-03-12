@@ -482,7 +482,7 @@ export function Autocomplete(props: {
     }
 
     if (toolsQuery && !toolFilter) {
-      return mixed.slice(0, 10)
+      return mixed
     }
 
     if (files.loading && prev && prev.length > 0) {
@@ -495,7 +495,7 @@ export function Autocomplete(props: {
         "description",
         (obj) => obj.aliases?.join(" ") ?? "",
       ],
-      limit: 10,
+      limit: toolsQuery ? 80 : 10,
       scoreFn: (objResults) => {
         const displayResult = objResults[0]
         let score = objResults.score
@@ -549,6 +549,7 @@ export function Autocomplete(props: {
       })
       show("/")
       setStore("index", 0)
+      setStore("selected", 0)
     }
   }
 
