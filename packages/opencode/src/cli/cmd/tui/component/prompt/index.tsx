@@ -349,21 +349,21 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
-        title: "Browse tools",
-        value: "prompt.tools",
+        title: "Browse MCP tools",
+        value: "prompt.mcp_tools",
         category: "Prompt",
         slash: {
-          name: "tools",
+          name: "mcp-tools",
         },
         onSelect: (dialog) => {
           dialog.clear()
-          input.setText("/tools ")
+          input.setText("/mcp-tools ")
           setStore("prompt", {
-            input: "/tools ",
+            input: "/mcp-tools ",
             parts: [],
           })
           input.gotoBufferEnd()
-          autocomplete.onInput("/tools ")
+          autocomplete.onInput("/mcp-tools ")
         },
       },
       {
@@ -646,17 +646,17 @@ export function Prompt(props: PromptProps) {
       return []
     }
 
-    const loadAllToolIDs = async () => {
+    const loadNativeToolIDs = async () => {
       const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
       const mcp = await loadMcpToolIDs()
-      return [...new Set([...ids, ...mcp])]
+      return ids.filter((id) => !mcp.includes(id))
     }
 
     if (inputText.startsWith("/tool ")) {
-      const [, rawToolName = "", ...rest] = inputText.split(" ")
+      const [, toolName = "", ...rest] = inputText.split(" ")
       const objective = rest.join(" ").trim()
 
-      if (!rawToolName) {
+      if (!toolName) {
         toast.show({
           variant: "warning",
           message: "Tool name is required. Use /tool <tool_name> <objective>.",
@@ -665,33 +665,7 @@ export function Prompt(props: PromptProps) {
         return
       }
 
-      const mcpTools = await loadMcpToolIDs()
-      const allTools = await loadAllToolIDs()
-      const nativeTools = allTools.filter((id) => !mcpTools.includes(id))
-
-      const parseTarget = () => {
-        if (rawToolName.startsWith("mcp:")) {
-          return {
-            target: rawToolName.slice(4),
-            scope: "mcp" as const,
-          }
-        }
-        if (rawToolName.startsWith("native:")) {
-          return {
-            target: rawToolName.slice(7),
-            scope: "native" as const,
-          }
-        }
-        return {
-          target: rawToolName,
-          scope: "any" as const,
-        }
-      }
-
-      const parsed = parseTarget()
-      const toolName = parsed.target
-      const available =
-        parsed.scope === "mcp" ? mcpTools : parsed.scope === "native" ? nativeTools : [...new Set([...allTools, ...mcpTools])]
+      const available = await loadNativeToolIDs()
 
       if (!toolName || !available.includes(toolName)) {
         const typed = toolName.toLowerCase()
@@ -706,27 +680,16 @@ export function Prompt(props: PromptProps) {
           message:
             suggestions.length > 0
               ? `Unknown tool: ${toolName}. Did you mean: ${suggestions.join(", ")}`
-              : `Unknown tool: ${toolName}. Type /tools to browse MCP tools or use /tool native:<name>.`,
+              : `Unknown tool: ${toolName}. Use /mcp-tools for MCP tools or /tool for native tools.`,
           duration: 4500,
         })
         return
       }
 
-      const isMcpTool = mcpTools.includes(toolName)
-
       if (objective === "--help") {
-        const details = (await MCP.tools().catch(() => ({}))) as Record<
-          string,
-          { description?: string; parameters?: unknown }
-        >
-        const selected = details[toolName]
-        const description = isMcpTool
-          ? selected?.description || "No dedicated help text is available for this MCP tool."
-          : "Native tool help is not exposed in this view. Use tool docs or run the action directly."
-        const args = isMcpTool ? summarizeToolParameters(selected?.parameters) : "- see native tool schema"
         toast.show({
           variant: "info",
-          message: `Tool help: ${toolName}\nScope: ${isMcpTool ? "mcp" : "native"}\nDescription: ${description}\nArguments:\n${args}`,
+          message: `Tool help: ${toolName}\nScope: native\nDescription: Native tool help is not exposed in this view. Use tool docs or run the action directly.\nArguments:\n- see native tool schema`,
           duration: 6500,
         })
         return
@@ -743,6 +706,71 @@ export function Prompt(props: PromptProps) {
 
       inputText = [
         `Use the tool \`${toolName}\` to complete this objective:`,
+        objective,
+        "If permission is required, ask for it before execution.",
+      ].join("\n")
+    }
+
+    if (inputText.startsWith("/mcp-tools ")) {
+      const [, toolName = "", ...rest] = inputText.split(" ")
+      const objective = rest.join(" ").trim()
+
+      if (!toolName) {
+        toast.show({
+          variant: "warning",
+          message: "Tool name is required. Use /mcp-tools <tool_name> <objective>.",
+          duration: 3500,
+        })
+        return
+      }
+
+      const mcpTools = await loadMcpToolIDs()
+      if (!mcpTools.includes(toolName)) {
+        const typed = toolName.toLowerCase()
+        const suggestions = mcpTools
+          .filter((id) => {
+            const candidate = id.toLowerCase()
+            return candidate.includes(typed) || typed.includes(candidate)
+          })
+          .slice(0, 5)
+        toast.show({
+          variant: "warning",
+          message:
+            suggestions.length > 0
+              ? `Unknown MCP tool: ${toolName}. Did you mean: ${suggestions.join(", ")}`
+              : "Unknown MCP tool. Type /mcp-tools to browse available MCP tools.",
+          duration: 4500,
+        })
+        return
+      }
+
+      if (objective === "--help") {
+        const details = (await MCP.tools().catch(() => ({}))) as Record<
+          string,
+          { description?: string; parameters?: unknown }
+        >
+        const selected = details[toolName]
+        const description = selected?.description || "No dedicated help text is available for this MCP tool."
+        const args = summarizeToolParameters(selected?.parameters)
+        toast.show({
+          variant: "info",
+          message: `Tool help: ${toolName}\nScope: mcp\nDescription: ${description}\nArguments:\n${args}`,
+          duration: 6500,
+        })
+        return
+      }
+
+      if (!objective) {
+        toast.show({
+          variant: "warning",
+          message: "Tool objective is required. Use /mcp-tools <tool_name> <objective> or /mcp-tools <tool_name> --help.",
+          duration: 4500,
+        })
+        return
+      }
+
+      inputText = [
+        `Use the MCP tool \`${toolName}\` to complete this objective:`,
         objective,
         "If permission is required, ask for it before execution.",
       ].join("\n")
