@@ -542,15 +542,6 @@ export function Autocomplete(props: {
     hide()
     selected.onSelect?.()
 
-    const text = props.input().plainText
-    if (text.startsWith("/mcp-tools")) {
-      props.setPrompt((draft) => {
-        draft.input = text
-      })
-      show("/")
-      setStore("index", 0)
-      setStore("selected", 0)
-    }
   }
 
   function expandDirectory() {
