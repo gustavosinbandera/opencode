@@ -353,7 +353,6 @@ export function Prompt(props: PromptProps) {
         category: "Prompt",
         slash: {
           name: "mcp-tools",
-          aliases: ["tools"],
         },
         onSelect: (dialog) => {
           dialog.clear()
@@ -708,7 +707,7 @@ export function Prompt(props: PromptProps) {
       ].join("\n")
     }
 
-    if (inputText === "/mcp-tools" || inputText === "/tools") {
+    if (inputText === "/mcp-tools") {
       const debug = await loadMcpDebugInfo()
       toast.show({
         variant: "info",
@@ -724,9 +723,8 @@ export function Prompt(props: PromptProps) {
       return
     }
 
-    if (inputText.startsWith("/mcp-tools ") || inputText.startsWith("/tools ")) {
-      const normalized = inputText.startsWith("/tools ") ? inputText.replace("/tools ", "/mcp-tools ") : inputText
-      const [, toolName = "", ...rest] = normalized.split(" ")
+    if (inputText.startsWith("/mcp-tools ")) {
+      const [, toolName = "", ...rest] = inputText.split(" ")
       const objective = rest.join(" ").trim()
 
       if (toolName === "--debug") {

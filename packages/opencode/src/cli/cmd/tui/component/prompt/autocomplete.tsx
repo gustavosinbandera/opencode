@@ -469,9 +469,8 @@ export function Autocomplete(props: {
     const commandsValue = commands()
     const searchValue = search()
 
-    const toolsQuery =
-      store.visible === "/" && (searchValue.startsWith("mcp-tools") || searchValue.startsWith("tools"))
-    const toolFilter = toolsQuery ? searchValue.replace(/^(mcp-tools|tools)\s*/, "") : ""
+    const toolsQuery = store.visible === "/" && searchValue.startsWith("mcp-tools")
+    const toolFilter = toolsQuery ? searchValue.replace(/^mcp-tools\s*/, "") : ""
 
     const mixed: AutocompleteOption[] =
       store.visible === "@"
@@ -546,7 +545,7 @@ export function Autocomplete(props: {
     selected.onSelect?.()
 
     const text = props.input().plainText
-    if (text.startsWith("/mcp-tools") || text.startsWith("/tools")) {
+    if (text.startsWith("/mcp-tools")) {
       props.setPrompt((draft) => {
         draft.input = text
       })
@@ -605,17 +604,14 @@ export function Autocomplete(props: {
       },
       onInput(value) {
         if (store.visible) {
-          const toolsMode = store.visible === "/" && (value.startsWith("/mcp-tools") || value.startsWith("/tools"))
+          const toolsMode = store.visible === "/" && value.startsWith("/mcp-tools")
           if (
             // Typed text before the trigger
             props.input().cursorOffset <= store.index ||
             // There is a space between the trigger and the cursor
             (!toolsMode && props.input().getTextRange(store.index, props.input().cursorOffset).match(/\s/)) ||
             // "/<command>" is not the sole content
-            (store.visible === "/" &&
-              value.match(/^\S+\s+\S+\s*$/) &&
-              !value.startsWith("/mcp-tools ") &&
-              !value.startsWith("/tools "))
+            (store.visible === "/" && value.match(/^\S+\s+\S+\s*$/) && !value.startsWith("/mcp-tools "))
           ) {
             hide()
           }
