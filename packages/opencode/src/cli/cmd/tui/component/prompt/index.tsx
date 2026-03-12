@@ -801,6 +801,26 @@ export function Prompt(props: PromptProps) {
         return
       }
 
+      if (/^\d+$/.test(objective)) {
+        const result = await sdk.client.mcp
+          .callTool({
+            tool: toolName,
+            args: {
+              work_item_id: Number(objective),
+              mode: "compact",
+            },
+          })
+          .then((x) => x.data?.output)
+          .catch((err) => `MCP tool call failed: ${err instanceof Error ? err.message : String(err)}`)
+
+        toast.show({
+          variant: "info",
+          message: result || "MCP tool returned no output.",
+          duration: 9000,
+        })
+        return
+      }
+
       inputText = [
         `Use the MCP tool \`${toolName}\` to complete this objective:`,
         objective,
