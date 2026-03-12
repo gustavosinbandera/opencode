@@ -93,3 +93,5 @@ La consolidacion se considera lista cuando exista:
   - `12-CLICKUP-PROJECT-TRACKING.md`
 - Iteration 2 execution:
   - `16-ITERACION-2-PLAN-EJECUCION.md`
+- Debug handoff (MCP tools):
+  - `17-MCP-TOOLS-DEBUG-HANDOFF.md`
