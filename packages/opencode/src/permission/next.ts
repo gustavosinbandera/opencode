@@ -8,6 +8,8 @@ import { PermissionTable } from "@/session/session.sql"
 import { fn } from "@/util/fn"
 import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
+import { Capability } from "./capability"
+import { Flag } from "@/flag/flag"
 import os from "os"
 import z from "zod"
 
@@ -96,6 +98,22 @@ export namespace PermissionNext {
 
   export const Event = {
     Asked: BusEvent.define("permission.asked", Request),
+    Evaluated: BusEvent.define(
+      "permission.evaluated",
+      z.object({
+        sessionID: z.string(),
+        permission: z.string(),
+        pattern: z.string(),
+        action: Action,
+        source: z.enum(["ruleset", "capability_default", "unknown_default"]),
+        capability: z.object({
+          id: z.string(),
+          source: z.enum(["native", "mcp", "unknown"]),
+          risk: z.enum(["low", "medium", "high", "critical"]),
+          defaultAction: Action,
+        }),
+      }),
+    ),
     Replied: BusEvent.define(
       "permission.replied",
       z.object({
@@ -125,6 +143,7 @@ export namespace PermissionNext {
     return {
       pending,
       approved: stored,
+      projectID,
     }
   })
 
@@ -137,9 +156,33 @@ export namespace PermissionNext {
       const { ruleset, ...request } = input
       for (const pattern of request.patterns ?? []) {
         const rule = evaluate(request.permission, pattern, ruleset, s.approved)
-        log.info("evaluated", { permission: request.permission, pattern, action: rule })
+        log.info("evaluated", {
+          permission: request.permission,
+          pattern,
+          action: rule.action,
+          source: rule.source,
+          capability: rule.capability,
+        })
+        Bus.publish(Event.Evaluated, {
+          sessionID: request.sessionID,
+          permission: request.permission,
+          pattern,
+          action: rule.action,
+          source: rule.source,
+          capability: {
+            id: rule.capability.id,
+            source: rule.capability.source,
+            risk: rule.capability.risk,
+            defaultAction: rule.capability.defaultAction,
+          },
+        })
         if (rule.action === "deny")
-          throw new DeniedError(ruleset.filter((r) => Wildcard.match(request.permission, r.permission)))
+          throw new DeniedError(
+            ruleset.filter((r) => Wildcard.match(request.permission, r.permission)),
+            rule.source === "ruleset"
+              ? undefined
+              : `Tool call denied by capability policy (${rule.capability.id}, source=${rule.source}).`,
+          )
         if (rule.action === "ask") {
           const id = input.id ?? Identifier.ascending("permission")
           return new Promise<void>((resolve, reject) => {
@@ -199,11 +242,17 @@ export namespace PermissionNext {
       }
       if (input.reply === "always") {
         for (const pattern of existing.info.always) {
-          s.approved.push({
-            permission: existing.info.permission,
-            pattern,
-            action: "allow",
-          })
+          const already = s.approved.some(
+            (rule) =>
+              rule.permission === existing.info.permission && rule.pattern === pattern && rule.action === "allow",
+          )
+          if (!already) {
+            s.approved.push({
+              permission: existing.info.permission,
+              pattern,
+              action: "allow",
+            })
+          }
         }
 
         existing.resolve()
@@ -224,22 +273,69 @@ export namespace PermissionNext {
           pending.resolve()
         }
 
-        // TODO: we don't save the permission ruleset to disk yet until there's
-        // UI to manage it
-        // db().insert(PermissionTable).values({ projectID: Instance.project.id, data: s.approved })
-        //   .onConflictDoUpdate({ target: PermissionTable.projectID, set: { data: s.approved } }).run()
+        Database.use((db) =>
+          db
+            .insert(PermissionTable)
+            .values({
+              project_id: s.projectID,
+              data: s.approved,
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .onConflictDoUpdate({
+              target: PermissionTable.project_id,
+              set: {
+                data: s.approved,
+                time_updated: Date.now(),
+              },
+            })
+            .run(),
+        )
         return
       }
     },
   )
 
-  export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
+  export type Evaluation = Rule & {
+    source: "ruleset" | "capability_default" | "unknown_default"
+    capability: Capability.Info
+  }
+
+  export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Evaluation {
     const merged = merge(...rulesets)
     log.info("evaluate", { permission, pattern, ruleset: merged })
     const match = merged.findLast(
       (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
     )
-    return match ?? { action: "ask", permission, pattern: "*" }
+    if (match) {
+      return {
+        ...match,
+        source: "ruleset",
+        capability: Capability.resolve(permission),
+      }
+    }
+
+    const capability = Capability.resolve(permission)
+    if (capability.source === "unknown" && Flag.OPENCODE_EXPERIMENTAL_CAPABILITY_DENY_UNKNOWN) {
+      return {
+        permission,
+        pattern: "*",
+        action: "deny",
+        source: "unknown_default",
+        capability: {
+          ...capability,
+          defaultAction: "deny",
+        },
+      }
+    }
+
+    return {
+      permission,
+      pattern: "*",
+      action: capability.defaultAction,
+      source: capability.source === "unknown" ? "unknown_default" : "capability_default",
+      capability,
+    }
   }
 
   const EDIT_TOOLS = ["edit", "write", "patch", "multiedit"]
@@ -272,9 +368,13 @@ export namespace PermissionNext {
 
   /** Auto-rejected by config rule - halts execution */
   export class DeniedError extends Error {
-    constructor(public readonly ruleset: Ruleset) {
+    constructor(
+      public readonly ruleset: Ruleset,
+      detail?: string,
+    ) {
       super(
-        `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(ruleset)}`,
+        detail ??
+          `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(ruleset)}`,
       )
     }
   }
