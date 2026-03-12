@@ -389,6 +389,12 @@ export function Autocomplete(props: {
     async () => {
       if (!store.visible || store.visible !== "/") return []
 
+      const mcpPrefixes = Object.keys(sync.data.mcp ?? {})
+        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
+        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
+
+      const isMcpTool = (id: string) => mcpPrefixes.some((prefix) => id.startsWith(prefix))
+
       const model = local.model.current()
       const providerID = model?.providerID
       const modelID = model?.modelID
@@ -404,6 +410,7 @@ export function Autocomplete(props: {
 
         if (detailed && detailed.length > 0) {
           return detailed
+            .filter((item) => isMcpTool(item.id))
             .map(
               (item): AutocompleteOption => ({
                 display: item.id,
@@ -423,6 +430,7 @@ export function Autocomplete(props: {
 
       const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
       return ids
+        .filter((id) => isMcpTool(id))
         .map(
           (id): AutocompleteOption => ({
             display: id,
