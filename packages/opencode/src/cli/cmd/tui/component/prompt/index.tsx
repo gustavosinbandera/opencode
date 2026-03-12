@@ -646,6 +646,25 @@ export function Prompt(props: PromptProps) {
       return []
     }
 
+    const loadMcpDebugInfo = async () => {
+      const config = await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))
+      const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
+      const direct = Object.keys(await MCP.tools().catch(() => ({})))
+      const configured = Object.keys(config.mcp ?? {})
+      const connected = Object.entries(status)
+        .filter(([, value]) => value.status === "connected")
+        .map(([key]) => key)
+      const local = Object.entries(config.mcp ?? {})
+        .filter(([, value]) => typeof value === "object" && value !== null && "type" in value && (value as any).type === "local")
+        .map(([key]) => key)
+      return {
+        configured,
+        connected,
+        local,
+        direct,
+      }
+    }
+
     const loadNativeToolIDs = async () => {
       const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
       const mcp = await loadMcpToolIDs()
@@ -711,21 +730,63 @@ export function Prompt(props: PromptProps) {
       ].join("\n")
     }
 
+    if (inputText === "/mcp-tools") {
+      const debug = await loadMcpDebugInfo()
+      toast.show({
+        variant: "info",
+        message: [
+          "MCP tools command",
+          "Use /mcp-tools <tool_name> <objective>",
+          "Use /mcp-tools <tool_name> --help",
+          "Use /mcp-tools --debug for diagnostics",
+          `tools loaded now: ${debug.direct.length}`,
+        ].join("\n"),
+        duration: 7000,
+      })
+      return
+    }
+
     if (inputText.startsWith("/mcp-tools ")) {
       const [, toolName = "", ...rest] = inputText.split(" ")
       const objective = rest.join(" ").trim()
 
-      if (!toolName) {
+      if (toolName === "--debug") {
+        const debug = await loadMcpDebugInfo()
+        const preview = debug.direct.slice(0, 12)
         toast.show({
-          variant: "warning",
-          message: "Tool name is required. Use /mcp-tools <tool_name> <objective>.",
-          duration: 3500,
+          variant: "info",
+          message: [
+            `MCP debug`,
+            `configured: ${debug.configured.join(", ") || "none"}`,
+            `connected: ${debug.connected.join(", ") || "none"}`,
+            `local: ${debug.local.join(", ") || "none"}`,
+            `tools loaded: ${debug.direct.length}`,
+            preview.length > 0 ? `sample: ${preview.join(", ")}` : "sample: none",
+          ].join("\n"),
+          duration: 9000,
+        })
+        return
+      }
+
+      if (!toolName) {
+        const debug = await loadMcpDebugInfo()
+        toast.show({
+          variant: "info",
+          message: [
+            "MCP tools command",
+            "Use /mcp-tools <tool_name> <objective>",
+            "Use /mcp-tools <tool_name> --help",
+            "Use /mcp-tools --debug for diagnostics",
+            `tools loaded now: ${debug.direct.length}`,
+          ].join("\n"),
+          duration: 7000,
         })
         return
       }
 
       const mcpTools = await loadMcpToolIDs()
       if (!mcpTools.includes(toolName)) {
+        const debug = await loadMcpDebugInfo()
         const typed = toolName.toLowerCase()
         const suggestions = mcpTools
           .filter((id) => {
@@ -738,8 +799,13 @@ export function Prompt(props: PromptProps) {
           message:
             suggestions.length > 0
               ? `Unknown MCP tool: ${toolName}. Did you mean: ${suggestions.join(", ")}`
-              : "Unknown MCP tool. Type /mcp-tools to browse available MCP tools.",
-          duration: 4500,
+              : [
+                  `Unknown MCP tool: ${toolName}`,
+                  "Type /mcp-tools and pick from autocomplete.",
+                  `loaded tools: ${debug.direct.length}`,
+                  debug.direct.length > 0 ? `sample: ${debug.direct.slice(0, 10).join(", ")}` : "sample: none",
+                ].join("\n"),
+          duration: 9000,
         })
         return
       }
