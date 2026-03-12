@@ -1,4 +1,4 @@
-# Consolidacion Final (4 Agentes)
+# Consolidacion Final (5 Agentes)
 
 ## Instrucciones
 
@@ -9,7 +9,7 @@
 
 - Objetivo del analisis: ejecutar el plan distribuido y consolidar decisiones implementables para OpenCode enterprise.
 - Alcance funcional: programming guide, MCP empresa, y comando explicito `/tool <nombre_tool> <objetivo>`.
-- Fuentes evaluadas: codigo OpenCode, AGENTS.md, docs locales del plan, hallazgos de 4 agentes.
+- Fuentes evaluadas: codigo OpenCode, AGENTS.md, docs locales del plan, hallazgos de 4 agentes (+ Agente 5 pendiente).
 
 ## 2) Resumen por agente
 
@@ -36,6 +36,12 @@
 - Hallazgo principal: flujo bug-centric correcto = work item -> updates -> changesets -> diffs -> evidencia de codigo.
 - Riesgo principal: perdida de eventos sin watermarks/idempotencia.
 - Recomendacion prioritaria: AzureEvidenceAdapter + jobs bootstrap/incremental/reconcile.
+
+### Agente 5 - MCP Tools DX and Help Quality
+
+- Hallazgo principal: runtime actual no implementa intents reservados `/tools` y `/tool`.
+- Riesgo principal: no hay flujo determinista para `/tool <name> --help`.
+- Recomendacion prioritaria: implementar parser/intents reservados + contrato de help estructurado + fallback.
 
 ## 3) Convergence Nodes (Top 3 obligatorio)
 
@@ -138,3 +144,6 @@
 - MCP server empresa conectado y validado: parcial (plan aprobado, validacion runtime pendiente por entorno).
 - Flujo `/tool <nombre_tool> <objetivo>` definido extremo a extremo: si (definido en plan/anexo, pendiente implementacion).
 - Controles de permisos/auditoria para `/tool`: si (definidos; pendientes de ejecucion tecnica).
+- Flujo `/tools` menu navegable y seleccion a `/tool <name>`: definido en spec, pendiente implementacion.
+- Soporte `/tool <name> --help` + fallback para tools sin help: definido en spec, pendiente implementacion.
+- Tool descriptions/help in English: requisito activo; auditoria Agente 5 completada, enforcement runtime pendiente.

@@ -17,6 +17,7 @@ Este documento solo define el plan. No incluye implementacion de codigo.
 - Agente 2: Arquitectura y Microservicios
 - Agente 3: IA Orchestrator y Calidad de Hipotesis
 - Agente 4: Azure Evidence Specialist
+- Agente 5: MCP Tools DX and Help Quality
 
 Cada agente tiene instrucciones detalladas en este folder.
 
@@ -34,6 +35,7 @@ Cada agente tiene instrucciones detalladas en este folder.
 2. Garantizar conectividad al MCP server de la empresa con estrategia de autenticacion y fallback.
 3. Definir soporte en la app para invocacion explicita de herramienta via `/tool <nombre_tool> <objetivo>`.
 4. Toda propuesta debe incluir controles de seguridad, permisos y auditoria.
+5. Todo texto de producto (descripciones de tools, help y mensajes de UX) debe estar en ingles.
 
 ## Flujo de trabajo entre agentes
 
@@ -41,6 +43,7 @@ Cada agente tiene instrucciones detalladas en este folder.
 2. Agente 2 define arquitectura objetivo y contratos de integracion.
 3. Agente 3 arbitra hipotesis, conflictos y prioriza backlog ejecutable.
 4. Agente 4 aterriza el dominio Azure en pipelines y endpoints concretos.
+5. Agente 5 valida UX/calidad de herramientas MCP (`/tools`, `--help`, descripciones) y define backlog de mejoras.
 
 ## Entregables obligatorios por agente
 
@@ -55,6 +58,7 @@ Formato obligatorio de entrega:
 - `05-TEMPLATE-ENTREGABLES.md`
 - Consolidacion final: `06-CONSOLIDACION-FINAL.md`
 - Anexo no negociables y `/tool`: `07-ANEXO-NO-NEGOCIABLES-Y-TOOL-COMMAND.md`
+- Agente 5 (MCP tools help/description): `13-AGENTE-MCP-TOOLS-DX-HELP.md`
 
 ## Consolidacion final del plan
 
@@ -82,6 +86,7 @@ La consolidacion se considera lista cuando exista:
   - `09-RESULTADO-AGENTE-2-ARQUITECTURA.md`
   - `10-RESULTADO-AGENTE-3-IA-ORQUESTACION.md`
   - `11-RESULTADO-AGENTE-4-AZURE.md`
+  - `14-RESULTADO-AGENTE-5-MCP-TOOLS-DX.md` (pendiente)
 - Consolidacion actual:
   - `06-CONSOLIDACION-FINAL.md`
 - Tracking de gestion:
