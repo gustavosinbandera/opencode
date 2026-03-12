@@ -524,6 +524,15 @@ export function Autocomplete(props: {
     if (!selected) return
     hide()
     selected.onSelect?.()
+
+    const text = props.input().plainText
+    if (text.startsWith("/tools")) {
+      props.setPrompt((draft) => {
+        draft.input = text
+      })
+      show("/")
+      setStore("index", 0)
+    }
   }
 
   function expandDirectory() {
