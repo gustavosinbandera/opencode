@@ -12,6 +12,7 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
 import { MCP } from "@/mcp"
+import { Config } from "@/config/config"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 
@@ -101,40 +102,25 @@ export function Autocomplete(props: {
     }
 
     const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
-    const prefixes = Object.keys(status)
-      .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
-      .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
-
-    if (prefixes.length > 0) {
-      const fromClient = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
-      const prefixed = fromClient.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
-      if (prefixed.length > 0) {
-        setMcpToolCache(prefixed)
-        return prefixed
-      }
-    }
+    const configured = Object.keys((await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))).mcp ?? {})
+    const candidates = [...new Set([...Object.keys(status), ...configured])]
 
     await Promise.all(
-      Object.entries(status).map(async ([name, state]) => {
-        if (state.status !== "connected" && state.status !== "disabled") {
+      candidates.map(async (name) => {
+        const state = status[name]
+        if (!state || (state.status !== "connected" && state.status !== "disabled")) {
           await MCP.connect(name).catch(() => undefined)
         }
       }),
     )
 
-    const retried = Object.keys(await MCP.tools().catch(() => ({})))
-    if (retried.length > 0) {
-      setMcpToolCache(retried)
-      return retried
-    }
-
-    if (prefixes.length > 0) {
-      const fromClient = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
-      const prefixed = fromClient.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
-      if (prefixed.length > 0) {
-        setMcpToolCache(prefixed)
-        return prefixed
+    for (let i = 0; i < 3; i++) {
+      const retried = Object.keys(await MCP.tools().catch(() => ({})))
+      if (retried.length > 0) {
+        setMcpToolCache(retried)
+        return retried
       }
+      await new Promise((resolve) => setTimeout(resolve, 250))
     }
 
     return mcpToolCache()

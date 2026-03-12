@@ -33,7 +33,9 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
+import { DialogTool } from "../dialog-tool"
 import { MCP } from "@/mcp"
+import { Config } from "@/config/config"
 
 export type PromptProps = {
   sessionID?: string
@@ -337,14 +339,19 @@ export function Prompt(props: PromptProps) {
           name: "tools",
         },
         onSelect: (dialog) => {
-          dialog.clear()
-          input.setText("/tools")
-          setStore("prompt", {
-            input: "/tools",
-            parts: [],
-          })
-          input.gotoBufferEnd()
-          autocomplete.onInput("/tools")
+          dialog.replace(() => (
+            <DialogTool
+              onSelect={(toolID) => {
+                const text = `/tool ${toolID} `
+                input.setText(text)
+                setStore("prompt", {
+                  input: text,
+                  parts: [],
+                })
+                input.gotoBufferEnd()
+              }}
+            />
+          ))
         },
       },
       {
@@ -594,30 +601,22 @@ export function Prompt(props: PromptProps) {
       if (direct.length > 0) return direct
 
       const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
-      const prefixes = Object.keys(status)
-        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
-        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
-
-      if (prefixes.length > 0) {
-        const all = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
-        const prefixed = all.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
-        if (prefixed.length > 0) return prefixed
-      }
+      const configured = Object.keys((await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))).mcp ?? {})
+      const candidates = [...new Set([...Object.keys(status), ...configured])]
 
       await Promise.all(
-        Object.entries(status).map(async ([name, state]) => {
-          if (state.status !== "connected" && state.status !== "disabled") {
+        candidates.map(async (name) => {
+          const state = status[name]
+          if (!state || (state.status !== "connected" && state.status !== "disabled")) {
             await MCP.connect(name).catch(() => undefined)
           }
         }),
       )
 
-      const retried = Object.keys(await MCP.tools().catch(() => ({})))
-      if (retried.length > 0) return retried
-
-      if (prefixes.length > 0) {
-        const all = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
-        return all.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
+      for (let i = 0; i < 3; i++) {
+        const retried = Object.keys(await MCP.tools().catch(() => ({})))
+        if (retried.length > 0) return retried
+        await new Promise((resolve) => setTimeout(resolve, 250))
       }
 
       return []
