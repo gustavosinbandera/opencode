@@ -63,6 +63,7 @@ import type {
   McpLocalConfig,
   McpRemoteConfig,
   McpStatusResponses,
+  McpToolsResponses,
   OutputFormat,
   Part as Part2,
   PartDeleteErrors,
@@ -3002,6 +3003,36 @@ export class Mcp extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<McpStatusResponses, unknown, ThrowOnError>({
       url: "/mcp",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List MCP tool ids
+   *
+   * Return MCP tool ids from the live MCP registry used by the server worker.
+   */
+  public tools<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<McpToolsResponses, unknown, ThrowOnError>({
+      url: "/mcp/tools",
       ...options,
       ...params,
     })

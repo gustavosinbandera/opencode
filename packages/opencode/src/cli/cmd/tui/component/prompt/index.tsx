@@ -33,7 +33,6 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
-import { MCP } from "@/mcp"
 
 export type PromptProps = {
   sessionID?: string
@@ -609,26 +608,12 @@ export function Prompt(props: PromptProps) {
     }
 
     const loadMcpToolIDs = async () => {
-      const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
-      const prefixes = Object.keys(status)
-        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
-        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
-
-      const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
-      const fromStatus = ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
-      const fromRegistry = Object.keys(await MCP.tools().catch(() => ({})))
-      return [...new Set([...fromStatus, ...fromRegistry])]
+      return sdk.client.mcp.tools().then((x) => (x.data ?? []) as string[]).catch(() => [] as string[])
     }
 
     const loadMcpDebugInfo = async () => {
       const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
-      const prefixes = Object.keys(status)
-        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
-        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
-      const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
-      const fromStatus = ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
-      const fromRegistry = Object.keys(await MCP.tools().catch(() => ({})))
-      const direct = [...new Set([...fromStatus, ...fromRegistry])]
+      const direct = await sdk.client.mcp.tools().then((x) => x.data ?? []).catch(() => [])
       const configured = Object.keys(status)
       const connected = Object.entries(status)
         .filter(([, value]) => value.status === "connected")
@@ -638,8 +623,6 @@ export function Prompt(props: PromptProps) {
         connected,
         local: configured,
         direct,
-        fromStatusCount: fromStatus.length,
-        fromRegistryCount: fromRegistry.length,
       }
     }
 
@@ -740,7 +723,6 @@ export function Prompt(props: PromptProps) {
             `connected: ${debug.connected.join(", ") || "none"}`,
             `local: ${debug.local.join(", ") || "none"}`,
             `tools loaded: ${debug.direct.length}`,
-            `source counts: status=${debug.fromStatusCount} registry=${debug.fromRegistryCount}`,
             preview.length > 0 ? `sample: ${preview.join(", ")}` : "sample: none",
           ].join("\n"),
           duration: 9000,
@@ -791,11 +773,15 @@ export function Prompt(props: PromptProps) {
       }
 
       if (objective === "--help") {
-        const details = (await MCP.tools().catch(() => ({}))) as Record<
-          string,
-          { description?: string; parameters?: unknown }
-        >
-        const selected = details[toolName]
+        const providerID = local.model.current()?.providerID
+        const modelID = local.model.current()?.modelID
+        const details = providerID && modelID
+          ? await sdk.client.tool
+              .list({ provider: providerID, model: modelID })
+              .then((x) => (x.data ?? []) as Array<{ id: string; description?: string; parameters?: unknown }>)
+              .catch(() => [] as Array<{ id: string; description?: string; parameters?: unknown }>)
+          : []
+        const selected = details.find((item) => item.id === toolName)
         const description = selected?.description || "No dedicated help text is available for this MCP tool."
         const args = summarizeToolParameters(selected?.parameters)
         toast.show({
