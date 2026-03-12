@@ -253,5 +253,44 @@ export const McpRoutes = lazy(() =>
         await MCP.disconnect(name)
         return c.json(true)
       },
+    )
+    .post(
+      "/call",
+      describeRoute({
+        summary: "Call MCP tool by id",
+        description: "Execute an MCP tool from the live worker-backed registry using its fully-qualified tool id.",
+        operationId: "mcp.callTool",
+        responses: {
+          200: {
+            description: "MCP tool result",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          tool: z.string(),
+          args: z.record(z.string(), z.any()).optional(),
+        }),
+      ),
+      async (c) => {
+        const { tool, args } = c.req.valid("json")
+        const item = (await MCP.tools())[tool]
+        if (!item?.execute) {
+          return c.json({ error: `MCP tool not found: ${tool}` }, 400)
+        }
+        const result = await item.execute(args ?? {}, {
+          messages: [],
+          abortSignal: c.req.raw.signal,
+          toolCallId: `mcp-call-${Date.now()}`,
+        })
+        return c.json(result)
+      },
     ),
 )
