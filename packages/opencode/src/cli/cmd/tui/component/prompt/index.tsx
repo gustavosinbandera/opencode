@@ -331,6 +331,24 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
+        title: "Use tool",
+        value: "prompt.tool",
+        category: "Prompt",
+        slash: {
+          name: "tool",
+        },
+        onSelect: (dialog) => {
+          dialog.clear()
+          input.setText("/tool ")
+          setStore("prompt", {
+            input: "/tool ",
+            parts: [],
+          })
+          input.gotoBufferEnd()
+          autocomplete.onInput("/tool ")
+        },
+      },
+      {
         title: "Browse tools",
         value: "prompt.tools",
         category: "Prompt",
@@ -628,6 +646,12 @@ export function Prompt(props: PromptProps) {
       return []
     }
 
+    const loadAllToolIDs = async () => {
+      const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+      const mcp = await loadMcpToolIDs()
+      return [...new Set([...ids, ...mcp])]
+    }
+
     if (inputText.startsWith("/tool ")) {
       const [, toolName = "", ...rest] = inputText.split(" ")
       const objective = rest.join(" ").trim()
@@ -641,7 +665,7 @@ export function Prompt(props: PromptProps) {
         return
       }
 
-      const available = await loadMcpToolIDs()
+      const available = await loadAllToolIDs()
       if (!available.includes(toolName)) {
         const typed = toolName.toLowerCase()
         const suggestions = available
@@ -662,11 +686,15 @@ export function Prompt(props: PromptProps) {
       }
 
       if (objective === "--help") {
-        const details = await MCP.tools().catch(() => ({}))
+        const details = (await MCP.tools().catch(() => ({}))) as Record<
+          string,
+          { description?: string; parameters?: unknown }
+        >
         const selected = details[toolName]
         const description = selected?.description || "No dedicated help text is available for this tool."
         const args = summarizeToolParameters(selected?.parameters)
         toast.show({
+          variant: "info",
           message: `Tool help: ${toolName}\nDescription: ${description}\nArguments:\n${args}`,
           duration: 6500,
         })
