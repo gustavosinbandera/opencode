@@ -608,12 +608,12 @@ export function Prompt(props: PromptProps) {
     }
 
     const loadMcpToolIDs = async () => {
-      return sdk.client.mcp.tools().then((x) => (x.data ?? []) as string[]).catch(() => [] as string[])
+      return sdk.client.mcp.tools({ scope: "local" }).then((x) => (x.data ?? []) as string[]).catch(() => [] as string[])
     }
 
     const loadMcpDebugInfo = async () => {
       const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
-      const direct = await sdk.client.mcp.tools().then((x) => x.data ?? []).catch(() => [])
+      const direct = await sdk.client.mcp.tools({ scope: "local" }).then((x) => x.data ?? []).catch(() => [])
       const configured = Object.keys(status)
       const connected = Object.entries(status)
         .filter(([, value]) => value.status === "connected")
