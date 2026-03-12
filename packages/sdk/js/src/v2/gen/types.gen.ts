@@ -4266,22 +4266,6 @@ export type McpToolsResponses = {
 
 export type McpToolsResponse = McpToolsResponses[keyof McpToolsResponses]
 
-export type McpCallToolData = unknown
-
-export type McpCallToolErrors = {
-  400: {
-    error: string
-  }
-}
-
-export type McpCallToolError = McpCallToolErrors[keyof McpCallToolErrors]
-
-export type McpCallToolResponses = {
-  200: McpCallToolData
-}
-
-export type McpCallToolResponse = McpCallToolResponses[keyof McpCallToolResponses]
-
 export type McpAddData = {
   body?: {
     name: string

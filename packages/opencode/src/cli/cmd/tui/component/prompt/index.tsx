@@ -792,23 +792,6 @@ export function Prompt(props: PromptProps) {
         return
       }
 
-      if (/^\d+$/.test(objective)) {
-        const result = await sdk.client.mcp
-          .callTool({
-            tool: toolName,
-            args: { work_item_id: Number(objective), mode: "compact" },
-          })
-          .then((x) => x.data)
-          .catch((error) => ({ error: error instanceof Error ? error.message : String(error) }))
-
-        toast.show({
-          variant: "info",
-          message: typeof result === "string" ? result : JSON.stringify(result, null, 2).slice(0, 4000),
-          duration: 9000,
-        })
-        return
-      }
-
       if (!objective) {
         toast.show({
           variant: "warning",

@@ -58,8 +58,6 @@ import type {
   McpAuthRemoveResponses,
   McpAuthStartErrors,
   McpAuthStartResponses,
-  McpCallToolErrors,
-  McpCallToolResponses,
   McpConnectResponses,
   McpDisconnectResponses,
   McpLocalConfig,
@@ -3039,45 +3037,6 @@ export class Mcp extends HeyApiClient {
       url: "/mcp/tools",
       ...options,
       ...params,
-    })
-  }
-
-  /**
-   * Call MCP tool by id
-   *
-   * Execute an MCP tool from the live worker-backed registry using its fully-qualified tool id.
-   */
-  public callTool<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      workspace?: string
-      tool?: string
-      args?: Record<string, unknown>
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-            { in: "body", key: "tool" },
-            { in: "body", key: "args" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<McpCallToolResponses, McpCallToolErrors, ThrowOnError>({
-      url: "/mcp/call",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
 
