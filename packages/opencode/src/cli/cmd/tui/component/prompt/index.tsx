@@ -593,14 +593,16 @@ export function Prompt(props: PromptProps) {
       const direct = Object.keys(await MCP.tools().catch(() => ({})))
       if (direct.length > 0) return direct
 
-      const status = await MCP.status().catch(() => ({}))
-      const prefixes = Object.keys(status)
-        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
-        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
+      const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
+      await Promise.all(
+        Object.entries(status).map(async ([name, state]) => {
+          if (state.status === "failed") {
+            await MCP.connect(name).catch(() => undefined)
+          }
+        }),
+      )
 
-      if (prefixes.length === 0) return []
-      const all = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
-      return all.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
+      return Object.keys(await MCP.tools().catch(() => ({})))
     }
 
     if (inputText.startsWith("/tool ")) {

@@ -91,6 +91,32 @@ export function Autocomplete(props: {
   })
 
   const [positionTick, setPositionTick] = createSignal(0)
+  const [mcpToolCache, setMcpToolCache] = createSignal<string[]>([])
+
+  const resolveMcpToolIDs = async () => {
+    const fromRegistry = Object.keys(await MCP.tools().catch(() => ({})))
+    if (fromRegistry.length > 0) {
+      setMcpToolCache(fromRegistry)
+      return fromRegistry
+    }
+
+    const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
+    await Promise.all(
+      Object.entries(status).map(async ([name, state]) => {
+        if (state.status === "failed") {
+          await MCP.connect(name).catch(() => undefined)
+        }
+      }),
+    )
+
+    const retried = Object.keys(await MCP.tools().catch(() => ({})))
+    if (retried.length > 0) {
+      setMcpToolCache(retried)
+      return retried
+    }
+
+    return mcpToolCache()
+  }
 
   createEffect(() => {
     if (store.visible) {
@@ -387,20 +413,7 @@ export function Autocomplete(props: {
     () => search(),
     async () => {
       if (!store.visible || store.visible !== "/") return []
-      const mcpTools = await MCP.tools().catch(() => ({}))
-      let ids = Object.keys(mcpTools)
-
-      if (ids.length === 0) {
-        const status = await MCP.status().catch(() => ({}))
-        const prefixes = Object.keys(status)
-          .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
-          .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
-
-        if (prefixes.length > 0) {
-          const all = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
-          ids = all.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
-        }
-      }
+      const ids = await resolveMcpToolIDs()
 
       return ids
         .map(
@@ -422,6 +435,10 @@ export function Autocomplete(props: {
       initialValue: [] as AutocompleteOption[],
     },
   )
+
+  onMount(() => {
+    resolveMcpToolIDs().catch(() => undefined)
+  })
 
   const options = createMemo((prev: AutocompleteOption[] | undefined) => {
     const filesValue = files()
