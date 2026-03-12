@@ -5,6 +5,7 @@ import { withNetworkOptions, resolveNetworkOptions } from "../network"
 import { Flag } from "../../flag/flag"
 import open from "open"
 import { networkInterfaces } from "os"
+import { exec } from "child_process"
 
 function getNetworkIPs() {
   const nets = networkInterfaces()
@@ -33,6 +34,26 @@ export const WebCommand = cmd({
   builder: (yargs) => withNetworkOptions(yargs),
   describe: "start opencode server and open web interface",
   handler: async (args) => {
+    const launch = async (url: string) => {
+      await open(url).catch(
+        () =>
+          new Promise<void>((resolve) => {
+            const cmd =
+              process.platform === "darwin"
+                ? `open "${url}"`
+                : process.platform === "win32"
+                  ? `start "" "${url}"`
+                  : `xdg-open "${url}"`
+            exec(cmd, (err) => {
+              if (err) {
+                UI.println(UI.Style.TEXT_WARNING_BOLD + "!  " + `Could not open browser automatically. Open this URL manually: ${url}`)
+              }
+              resolve()
+            })
+          }),
+      )
+    }
+
     if (!Flag.OPENCODE_SERVER_PASSWORD) {
       UI.println(UI.Style.TEXT_WARNING_BOLD + "!  " + "OPENCODE_SERVER_PASSWORD is not set; server is unsecured.")
     }
@@ -68,11 +89,11 @@ export const WebCommand = cmd({
       }
 
       // Open localhost in browser
-      open(localhostUrl.toString()).catch(() => {})
+      await launch(localhostUrl.toString())
     } else {
       const displayUrl = server.url.toString()
       UI.println(UI.Style.TEXT_INFO_BOLD + "  Web interface:    ", UI.Style.TEXT_NORMAL, displayUrl)
-      open(displayUrl).catch(() => {})
+      await launch(displayUrl)
     }
 
     await new Promise(() => {})
