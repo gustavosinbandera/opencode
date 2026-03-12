@@ -436,36 +436,6 @@ export function Autocomplete(props: {
       if (!store.visible || store.visible !== "/") return []
       const ids = await resolveMcpToolIDs()
 
-      if (ids.length === 0) {
-        const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
-        const configured = await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))
-        const configuredNames = Object.keys(configured.mcp ?? {})
-        const connectedNames = Object.entries(status)
-          .filter(([, value]) => value.status === "connected")
-          .map(([name]) => name)
-
-        return [
-          {
-            display: "No MCP tools loaded",
-            value: "__mcp_empty__",
-            description: `configured=${configuredNames.length} connected=${connectedNames.length}`,
-            disabled: true,
-          },
-          {
-            display: "Run /mcp-tools --debug",
-            value: "__mcp_debug__",
-            description: "Insert debug command to inspect MCP status",
-            onSelect: () => {
-              const newText = "/mcp-tools --debug"
-              const cursor = props.input().logicalCursor
-              props.input().deleteRange(0, 0, cursor.row, cursor.col)
-              props.input().insertText(newText)
-              props.input().cursorOffset = Bun.stringWidth(newText)
-            },
-          },
-        ]
-      }
-
       return ids
         .map(
           (id): AutocompleteOption => ({
