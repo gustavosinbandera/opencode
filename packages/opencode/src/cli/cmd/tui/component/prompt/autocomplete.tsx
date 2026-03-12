@@ -11,6 +11,7 @@ import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
+import { MCP } from "@/mcp"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 
@@ -93,11 +94,21 @@ export function Autocomplete(props: {
   const [mcpToolCache, setMcpToolCache] = createSignal<string[]>([])
 
   const resolveMcpToolIDs = async () => {
-    const ids = await sdk.client.mcp.tools().then((x) => x.data ?? []).catch(() => [])
-    if (ids.length > 0) {
-      setMcpToolCache(ids)
-      return ids
+    const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
+    const prefixes = Object.keys(status)
+      .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
+      .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
+
+    const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+    const fromStatus = ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
+    const fromRegistry = Object.keys(await MCP.tools().catch(() => ({})))
+
+    const merged = [...new Set([...fromStatus, ...fromRegistry])]
+    if (merged.length > 0) {
+      setMcpToolCache(merged)
+      return merged
     }
+
     return mcpToolCache()
   }
 
