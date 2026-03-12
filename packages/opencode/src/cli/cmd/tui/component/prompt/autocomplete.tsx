@@ -505,7 +505,7 @@ export function Autocomplete(props: {
     return result.map((arr) => arr.obj)
   })
 
-  const groupedOptions = createMemo(() => {
+  const groups = createMemo(() => {
     if (!(store.visible === "/" && (search().startsWith("mcp-tools") || search().startsWith("tools")))) {
       return [{ category: "", items: options() }]
     }
@@ -519,9 +519,15 @@ export function Autocomplete(props: {
     return Array.from(grouped.entries()).map(([category, items]) => ({ category, items }))
   })
 
-  const flatOptions = createMemo(() => {
-    return groupedOptions().flatMap((group) => group.items)
+  const rows = createMemo(() => {
+    return groups().flatMap((group) => {
+      const header = group.category ? [{ type: "header" as const, category: group.category }] : []
+      const items = group.items.map((item) => ({ type: "item" as const, item }))
+      return [...header, ...items]
+    })
   })
+
+  const items = createMemo(() => rows().filter((row) => row.type === "item").map((row) => row.item))
 
   createEffect(() => {
     filter()
@@ -530,17 +536,17 @@ export function Autocomplete(props: {
 
   function move(direction: -1 | 1) {
     if (!store.visible) return
-    if (!flatOptions().length) return
+    if (!items().length) return
     let next = store.selected + direction
-    if (next < 0) next = flatOptions().length - 1
-    if (next >= flatOptions().length) next = 0
+    if (next < 0) next = items().length - 1
+    if (next >= items().length) next = 0
     moveTo(next)
   }
 
   function moveTo(next: number) {
     setStore("selected", next)
     if (!scroll) return
-    const viewportHeight = Math.min(height(), flatOptions().length)
+    const viewportHeight = Math.min(height(), rows().length)
     const scrollBottom = scroll.scrollTop + viewportHeight
     if (next < scroll.scrollTop) {
       scroll.scrollBy(next - scroll.scrollTop)
@@ -550,7 +556,7 @@ export function Autocomplete(props: {
   }
 
   function select() {
-    const selected = flatOptions()[store.selected]
+    const selected = items()[store.selected]
     if (!selected) return
     hide()
     selected.onSelect?.()
@@ -566,7 +572,7 @@ export function Autocomplete(props: {
   }
 
   function expandDirectory() {
-    const selected = flatOptions()[store.selected]
+    const selected = items()[store.selected]
     if (!selected) return
 
     const input = props.input()
@@ -713,8 +719,7 @@ export function Autocomplete(props: {
   })
 
   const height = createMemo(() => {
-    const extraHeaders = groupedOptions().filter((group) => group.category).length
-    const count = (options().length || 1) + extraHeaders
+    const count = rows().length || 1
     if (!store.visible) return Math.min(10, count)
     positionTick()
     return Math.min(20, count, Math.max(1, props.anchor().y))
@@ -740,65 +745,53 @@ export function Autocomplete(props: {
         scrollbarOptions={{ visible: false }}
       >
         <Index
-          each={groupedOptions()}
+          each={rows()}
           fallback={
             <box paddingLeft={1} paddingRight={1}>
               <text fg={theme.textMuted}>No matching items</text>
             </box>
           }
         >
-          {(group) => {
-            let runningIndex = -1
+          {(row) => {
+            const current = row()
+            if (current.type === "header") {
+              return (
+                <box paddingLeft={1} paddingRight={1}>
+                  <text fg={theme.accent}>{current.category}</text>
+                </box>
+              )
+            }
+
+            const option = current.item
+            const active = () => items().findIndex((entry) => entry === option)
             return (
-              <>
-                <Show when={group().category}>
-                  <box paddingLeft={1} paddingRight={1}>
-                    <text fg={theme.accent}>{group().category}</text>
-                  </box>
+              <box
+                paddingLeft={1}
+                paddingRight={1}
+                backgroundColor={active() === store.selected ? theme.primary : undefined}
+                flexDirection="row"
+                onMouseMove={() => {
+                  setStore("input", "mouse")
+                }}
+                onMouseOver={() => {
+                  if (store.input !== "mouse") return
+                  moveTo(active())
+                }}
+                onMouseDown={() => {
+                  setStore("input", "mouse")
+                  moveTo(active())
+                }}
+                onMouseUp={() => select()}
+              >
+                <text fg={active() === store.selected ? selectedForeground(theme) : theme.text} flexShrink={0}>
+                  {option.display}
+                </text>
+                <Show when={option.description}>
+                  <text fg={active() === store.selected ? selectedForeground(theme) : theme.textMuted} wrapMode="none">
+                    {option.description}
+                  </text>
                 </Show>
-                <Index each={group().items}>
-                  {(option) => {
-                    runningIndex += 1
-                    const absoluteIndex = () => {
-                      let offset = 0
-                      for (const current of groupedOptions()) {
-                        if (current === group()) break
-                        offset += current.items.length
-                      }
-                      return offset + runningIndex
-                    }
-                    return (
-                      <box
-                        paddingLeft={1}
-                        paddingRight={1}
-                        backgroundColor={absoluteIndex() === store.selected ? theme.primary : undefined}
-                        flexDirection="row"
-                        onMouseMove={() => {
-                          setStore("input", "mouse")
-                        }}
-                        onMouseOver={() => {
-                          if (store.input !== "mouse") return
-                          moveTo(absoluteIndex())
-                        }}
-                        onMouseDown={() => {
-                          setStore("input", "mouse")
-                          moveTo(absoluteIndex())
-                        }}
-                        onMouseUp={() => select()}
-                      >
-                        <text fg={absoluteIndex() === store.selected ? selectedForeground(theme) : theme.text} flexShrink={0}>
-                          {option().display}
-                        </text>
-                        <Show when={option().description}>
-                          <text fg={absoluteIndex() === store.selected ? selectedForeground(theme) : theme.textMuted} wrapMode="none">
-                            {option().description}
-                          </text>
-                        </Show>
-                      </box>
-                    )
-                  }}
-                </Index>
-              </>
+              </box>
             )
           }}
         </Index>
