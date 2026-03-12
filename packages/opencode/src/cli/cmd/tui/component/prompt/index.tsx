@@ -964,6 +964,10 @@ export function Prompt(props: PromptProps) {
                 setStore("prompt", "input", value)
                 autocomplete.onInput(value)
                 syncExtmarksWithPromptParts()
+
+                if (store.mode === "normal" && (value === "/tools" || value === "/tools ")) {
+                  command.trigger("prompt.tools")
+                }
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e) => {
