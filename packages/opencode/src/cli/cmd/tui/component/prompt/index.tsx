@@ -653,10 +653,10 @@ export function Prompt(props: PromptProps) {
     }
 
     if (inputText.startsWith("/tool ")) {
-      const [, toolName = "", ...rest] = inputText.split(" ")
+      const [, rawToolName = "", ...rest] = inputText.split(" ")
       const objective = rest.join(" ").trim()
 
-      if (!toolName) {
+      if (!rawToolName) {
         toast.show({
           variant: "warning",
           message: "Tool name is required. Use /tool <tool_name> <objective>.",
@@ -665,8 +665,35 @@ export function Prompt(props: PromptProps) {
         return
       }
 
-      const available = await loadAllToolIDs()
-      if (!available.includes(toolName)) {
+      const mcpTools = await loadMcpToolIDs()
+      const allTools = await loadAllToolIDs()
+      const nativeTools = allTools.filter((id) => !mcpTools.includes(id))
+
+      const parseTarget = () => {
+        if (rawToolName.startsWith("mcp:")) {
+          return {
+            target: rawToolName.slice(4),
+            scope: "mcp" as const,
+          }
+        }
+        if (rawToolName.startsWith("native:")) {
+          return {
+            target: rawToolName.slice(7),
+            scope: "native" as const,
+          }
+        }
+        return {
+          target: rawToolName,
+          scope: "any" as const,
+        }
+      }
+
+      const parsed = parseTarget()
+      const toolName = parsed.target
+      const available =
+        parsed.scope === "mcp" ? mcpTools : parsed.scope === "native" ? nativeTools : [...new Set([...allTools, ...mcpTools])]
+
+      if (!toolName || !available.includes(toolName)) {
         const typed = toolName.toLowerCase()
         const suggestions = available
           .filter((id) => {
@@ -679,11 +706,13 @@ export function Prompt(props: PromptProps) {
           message:
             suggestions.length > 0
               ? `Unknown tool: ${toolName}. Did you mean: ${suggestions.join(", ")}`
-              : `Unknown tool: ${toolName}. Type /tools to browse available tools.`,
+              : `Unknown tool: ${toolName}. Type /tools to browse MCP tools or use /tool native:<name>.`,
           duration: 4500,
         })
         return
       }
+
+      const isMcpTool = mcpTools.includes(toolName)
 
       if (objective === "--help") {
         const details = (await MCP.tools().catch(() => ({}))) as Record<
@@ -691,11 +720,13 @@ export function Prompt(props: PromptProps) {
           { description?: string; parameters?: unknown }
         >
         const selected = details[toolName]
-        const description = selected?.description || "No dedicated help text is available for this tool."
-        const args = summarizeToolParameters(selected?.parameters)
+        const description = isMcpTool
+          ? selected?.description || "No dedicated help text is available for this MCP tool."
+          : "Native tool help is not exposed in this view. Use tool docs or run the action directly."
+        const args = isMcpTool ? summarizeToolParameters(selected?.parameters) : "- see native tool schema"
         toast.show({
           variant: "info",
-          message: `Tool help: ${toolName}\nDescription: ${description}\nArguments:\n${args}`,
+          message: `Tool help: ${toolName}\nScope: ${isMcpTool ? "mcp" : "native"}\nDescription: ${description}\nArguments:\n${args}`,
           duration: 6500,
         })
         return
