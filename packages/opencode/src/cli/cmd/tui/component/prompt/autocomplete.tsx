@@ -406,9 +406,8 @@ export function Autocomplete(props: {
           return detailed
             .map(
               (item): AutocompleteOption => ({
-                display: `/tool ${item.id}`,
+                display: item.id,
                 value: item.id,
-                description: item.description,
                 onSelect: () => {
                   const newText = `/tool ${item.id} `
                   const cursor = props.input().logicalCursor
@@ -426,7 +425,7 @@ export function Autocomplete(props: {
       return ids
         .map(
           (id): AutocompleteOption => ({
-            display: `/tool ${id}`,
+            display: id,
             value: id,
             onSelect: () => {
               const newText = `/tool ${id} `
