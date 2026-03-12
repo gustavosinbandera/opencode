@@ -5,13 +5,13 @@ import { firstBy } from "remeda"
 import { createMemo, createResource, createEffect, onMount, onCleanup, Index, Show, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
-import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
 import { useTheme, selectedForeground } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
+import { MCP } from "@/mcp"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 
@@ -77,7 +77,6 @@ export function Autocomplete(props: {
   promptPartTypeId: () => number
 }) {
   const sdk = useSDK()
-  const local = useLocal()
   const sync = useSync()
   const command = useCommandDialog()
   const { theme } = useTheme()
@@ -388,49 +387,9 @@ export function Autocomplete(props: {
     () => search(),
     async () => {
       if (!store.visible || store.visible !== "/") return []
-
-      const mcpPrefixes = Object.keys(sync.data.mcp ?? {})
-        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
-        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
-
-      const isMcpTool = (id: string) => mcpPrefixes.some((prefix) => id.startsWith(prefix))
-
-      const model = local.model.current()
-      const providerID = model?.providerID
-      const modelID = model?.modelID
-
-      if (providerID && modelID) {
-        const detailed = await sdk.client.tool
-          .list({
-            provider: providerID,
-            model: modelID,
-          })
-          .then((x) => x.data ?? [])
-          .catch(() => undefined)
-
-        if (detailed && detailed.length > 0) {
-          return detailed
-            .filter((item) => isMcpTool(item.id))
-            .map(
-              (item): AutocompleteOption => ({
-                display: item.id,
-                value: item.id,
-                onSelect: () => {
-                  const newText = `/tool ${item.id} `
-                  const cursor = props.input().logicalCursor
-                  props.input().deleteRange(0, 0, cursor.row, cursor.col)
-                  props.input().insertText(newText)
-                  props.input().cursorOffset = Bun.stringWidth(newText)
-                },
-              }),
-            )
-            .sort((a, b) => a.display.localeCompare(b.display))
-        }
-      }
-
-      const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+      const mcpTools = await MCP.tools().catch(() => ({}))
+      const ids = Object.keys(mcpTools)
       return ids
-        .filter((id) => isMcpTool(id))
         .map(
           (id): AutocompleteOption => ({
             display: id,

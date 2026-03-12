@@ -33,6 +33,7 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
+import { MCP } from "@/mcp"
 
 export type PromptProps = {
   sessionID?: string
@@ -601,7 +602,7 @@ export function Prompt(props: PromptProps) {
         return
       }
 
-      const available = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+      const available = Object.keys(await MCP.tools().catch(() => ({})))
       if (!available.includes(toolName)) {
         const typed = toolName.toLowerCase()
         const suggestions = available
@@ -622,14 +623,8 @@ export function Prompt(props: PromptProps) {
       }
 
       if (objective === "--help") {
-        const details = await sdk.client.tool
-          .list({
-            provider: selectedModel.providerID,
-            model: selectedModel.modelID,
-          })
-          .then((x) => x.data ?? [])
-          .catch(() => [])
-        const selected = details.find((item) => item.id === toolName)
+        const details = await MCP.tools().catch(() => ({}))
+        const selected = details[toolName]
         const description = selected?.description || "No dedicated help text is available for this tool."
         const args = summarizeToolParameters(selected?.parameters)
         toast.show({
