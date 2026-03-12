@@ -615,8 +615,9 @@ export function Prompt(props: PromptProps) {
 
       const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
       const fromStatus = ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
-      const fromRegistry = Object.keys(await MCP.tools().catch(() => ({})))
-      return [...new Set([...fromStatus, ...fromRegistry])]
+      if (fromStatus.length > 0) return fromStatus
+
+      return Object.keys(await MCP.tools().catch(() => ({})))
     }
 
     const loadMcpDebugInfo = async () => {
@@ -625,9 +626,7 @@ export function Prompt(props: PromptProps) {
         .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
         .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
       const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
-      const fromStatus = ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
-      const fromRegistry = Object.keys(await MCP.tools().catch(() => ({})))
-      const direct = [...new Set([...fromStatus, ...fromRegistry])]
+      const direct = ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
       const configured = Object.keys(status)
       const connected = Object.entries(status)
         .filter(([, value]) => value.status === "connected")
@@ -637,8 +636,6 @@ export function Prompt(props: PromptProps) {
         connected,
         local: configured,
         direct,
-        fromStatusCount: fromStatus.length,
-        fromRegistryCount: fromRegistry.length,
       }
     }
 
@@ -738,7 +735,6 @@ export function Prompt(props: PromptProps) {
             `connected: ${debug.connected.join(", ") || "none"}`,
             `local: ${debug.local.join(", ") || "none"}`,
             `tools loaded: ${debug.direct.length}`,
-            `source counts: status=${debug.fromStatusCount} registry=${debug.fromRegistryCount}`,
             preview.length > 0 ? `sample: ${preview.join(", ")}` : "sample: none",
           ].join("\n"),
           duration: 9000,

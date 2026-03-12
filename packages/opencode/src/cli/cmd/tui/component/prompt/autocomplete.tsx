@@ -101,12 +101,15 @@ export function Autocomplete(props: {
 
     const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
     const fromStatus = ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
-    const fromRegistry = Object.keys(await MCP.tools().catch(() => ({})))
+    if (fromStatus.length > 0) {
+      setMcpToolCache(fromStatus)
+      return fromStatus
+    }
 
-    const merged = [...new Set([...fromStatus, ...fromRegistry])]
-    if (merged.length > 0) {
-      setMcpToolCache(merged)
-      return merged
+    const fromRegistry = Object.keys(await MCP.tools().catch(() => ({})))
+    if (fromRegistry.length > 0) {
+      setMcpToolCache(fromRegistry)
+      return fromRegistry
     }
 
     return mcpToolCache()
