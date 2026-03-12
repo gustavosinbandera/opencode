@@ -12,6 +12,7 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
 import { MCP } from "@/mcp"
+import { Config } from "@/config/config"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 
@@ -94,25 +95,48 @@ export function Autocomplete(props: {
   const [mcpToolCache, setMcpToolCache] = createSignal<string[]>([])
 
   const resolveMcpToolIDs = async () => {
-    const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
-    const prefixes = Object.keys(status)
+    const config = await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))
+    const localMcpNames = Object.entries(config.mcp ?? {})
+      .filter(([, value]) => typeof value === "object" && value !== null && "type" in value && (value as any).type === "local")
+      .map(([name]) => name)
+    const localPrefixes = localMcpNames
       .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
       .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
 
-    const ids = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
-    const fromStatus = ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
-    if (fromStatus.length > 0) {
-      setMcpToolCache(fromStatus)
-      return fromStatus
+    const pickLocal = (ids: string[]) => {
+      if (localPrefixes.length === 0) return ids
+      return ids.filter((id) => localPrefixes.some((prefix) => id.startsWith(prefix)))
     }
 
-    const fromRegistry = Object.keys(await MCP.tools().catch(() => ({})))
+    const fromRegistry = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
     if (fromRegistry.length > 0) {
       setMcpToolCache(fromRegistry)
       return fromRegistry
     }
 
-    return mcpToolCache()
+    const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
+    const configured = Object.keys(config.mcp ?? {})
+    const candidates = [...new Set([...Object.keys(status), ...configured])]
+
+    await Promise.all(
+      candidates.map(async (name) => {
+        const state = status[name]
+        if (!state || (state.status !== "connected" && state.status !== "disabled")) {
+          await MCP.connect(name).catch(() => undefined)
+        }
+      }),
+    )
+
+    for (let i = 0; i < 3; i++) {
+      const retried = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
+      if (retried.length > 0) {
+        setMcpToolCache(retried)
+        return retried
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+
+    return pickLocal(mcpToolCache())
   }
 
   createEffect(() => {
@@ -413,8 +437,9 @@ export function Autocomplete(props: {
       const ids = await resolveMcpToolIDs()
 
       if (ids.length === 0) {
-        const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
-        const configuredNames = Object.keys(status)
+        const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
+        const configured = await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))
+        const configuredNames = Object.keys(configured.mcp ?? {})
         const connectedNames = Object.entries(status)
           .filter(([, value]) => value.status === "connected")
           .map(([name]) => name)
