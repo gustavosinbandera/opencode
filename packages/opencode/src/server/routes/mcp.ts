@@ -26,12 +26,7 @@ export const McpRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const status = await MCP.status()
-        const connected = Object.keys(status).filter((key) => status[key]?.status === "connected")
-        const prefixes = connected.map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
-        const ids = Object.keys(await MCP.tools())
-        const filtered = prefixes.length > 0 ? ids.filter((id) => prefixes.some((prefix) => id.startsWith(prefix))) : ids
-        return c.json(filtered)
+        return c.json(Object.keys(await MCP.tools()))
       },
     )
     .get(
