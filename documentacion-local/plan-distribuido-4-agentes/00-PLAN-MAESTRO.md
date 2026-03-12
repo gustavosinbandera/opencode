@@ -91,3 +91,5 @@ La consolidacion se considera lista cuando exista:
   - `06-CONSOLIDACION-FINAL.md`
 - Tracking de gestion:
   - `12-CLICKUP-PROJECT-TRACKING.md`
+- Iteration 2 execution:
+  - `16-ITERACION-2-PLAN-EJECUCION.md`
