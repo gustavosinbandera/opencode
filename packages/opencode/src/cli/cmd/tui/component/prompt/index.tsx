@@ -589,6 +589,20 @@ export function Prompt(props: PromptProps) {
         .join("\n")
     }
 
+    const loadMcpToolIDs = async () => {
+      const direct = Object.keys(await MCP.tools().catch(() => ({})))
+      if (direct.length > 0) return direct
+
+      const status = await MCP.status().catch(() => ({}))
+      const prefixes = Object.keys(status)
+        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
+        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
+
+      if (prefixes.length === 0) return []
+      const all = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+      return all.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
+    }
+
     if (inputText.startsWith("/tool ")) {
       const [, toolName = "", ...rest] = inputText.split(" ")
       const objective = rest.join(" ").trim()
@@ -602,7 +616,7 @@ export function Prompt(props: PromptProps) {
         return
       }
 
-      const available = Object.keys(await MCP.tools().catch(() => ({})))
+      const available = await loadMcpToolIDs()
       if (!available.includes(toolName)) {
         const typed = toolName.toLowerCase()
         const suggestions = available

@@ -388,7 +388,20 @@ export function Autocomplete(props: {
     async () => {
       if (!store.visible || store.visible !== "/") return []
       const mcpTools = await MCP.tools().catch(() => ({}))
-      const ids = Object.keys(mcpTools)
+      let ids = Object.keys(mcpTools)
+
+      if (ids.length === 0) {
+        const status = await MCP.status().catch(() => ({}))
+        const prefixes = Object.keys(status)
+          .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
+          .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
+
+        if (prefixes.length > 0) {
+          const all = await sdk.client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+          ids = all.filter((id) => prefixes.some((prefix) => id.startsWith(prefix)))
+        }
+      }
+
       return ids
         .map(
           (id): AutocompleteOption => ({
