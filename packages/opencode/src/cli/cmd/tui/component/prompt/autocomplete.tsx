@@ -95,14 +95,27 @@ export function Autocomplete(props: {
   const [mcpToolCache, setMcpToolCache] = createSignal<string[]>([])
 
   const resolveMcpToolIDs = async () => {
-    const fromRegistry = Object.keys(await MCP.tools().catch(() => ({})))
+    const config = await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))
+    const localMcpNames = Object.entries(config.mcp ?? {})
+      .filter(([, value]) => typeof value === "object" && value !== null && "type" in value && (value as any).type === "local")
+      .map(([name]) => name)
+    const localPrefixes = localMcpNames
+      .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
+      .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
+
+    const pickLocal = (ids: string[]) => {
+      if (localPrefixes.length === 0) return ids
+      return ids.filter((id) => localPrefixes.some((prefix) => id.startsWith(prefix)))
+    }
+
+    const fromRegistry = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
     if (fromRegistry.length > 0) {
       setMcpToolCache(fromRegistry)
       return fromRegistry
     }
 
     const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
-    const configured = Object.keys((await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))).mcp ?? {})
+    const configured = Object.keys(config.mcp ?? {})
     const candidates = [...new Set([...Object.keys(status), ...configured])]
 
     await Promise.all(
@@ -115,7 +128,7 @@ export function Autocomplete(props: {
     )
 
     for (let i = 0; i < 3; i++) {
-      const retried = Object.keys(await MCP.tools().catch(() => ({})))
+      const retried = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
       if (retried.length > 0) {
         setMcpToolCache(retried)
         return retried
@@ -123,7 +136,7 @@ export function Autocomplete(props: {
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
 
-    return mcpToolCache()
+    return pickLocal(mcpToolCache())
   }
 
   createEffect(() => {

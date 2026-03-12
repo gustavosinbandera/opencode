@@ -33,7 +33,6 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
-import { DialogTool } from "../dialog-tool"
 import { MCP } from "@/mcp"
 import { Config } from "@/config/config"
 
@@ -339,19 +338,14 @@ export function Prompt(props: PromptProps) {
           name: "tools",
         },
         onSelect: (dialog) => {
-          dialog.replace(() => (
-            <DialogTool
-              onSelect={(toolID) => {
-                const text = `/tool ${toolID} `
-                input.setText(text)
-                setStore("prompt", {
-                  input: text,
-                  parts: [],
-                })
-                input.gotoBufferEnd()
-              }}
-            />
-          ))
+          dialog.clear()
+          input.setText("/tools ")
+          setStore("prompt", {
+            input: "/tools ",
+            parts: [],
+          })
+          input.gotoBufferEnd()
+          autocomplete.onInput("/tools ")
         },
       },
       {
@@ -597,11 +591,23 @@ export function Prompt(props: PromptProps) {
     }
 
     const loadMcpToolIDs = async () => {
-      const direct = Object.keys(await MCP.tools().catch(() => ({})))
+      const config = await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))
+      const localMcpNames = Object.entries(config.mcp ?? {})
+        .filter(([, value]) => typeof value === "object" && value !== null && "type" in value && (value as any).type === "local")
+        .map(([name]) => name)
+      const localPrefixes = localMcpNames
+        .map((name) => name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_")
+        .filter((prefix, index, arr) => arr.indexOf(prefix) === index)
+      const pickLocal = (ids: string[]) => {
+        if (localPrefixes.length === 0) return ids
+        return ids.filter((id) => localPrefixes.some((prefix) => id.startsWith(prefix)))
+      }
+
+      const direct = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
       if (direct.length > 0) return direct
 
       const status = await MCP.status().catch(() => ({} as Awaited<ReturnType<typeof MCP.status>>))
-      const configured = Object.keys((await Config.get().catch(() => ({ mcp: {} as Record<string, unknown> }))).mcp ?? {})
+      const configured = Object.keys(config.mcp ?? {})
       const candidates = [...new Set([...Object.keys(status), ...configured])]
 
       await Promise.all(
@@ -614,7 +620,7 @@ export function Prompt(props: PromptProps) {
       )
 
       for (let i = 0; i < 3; i++) {
-        const retried = Object.keys(await MCP.tools().catch(() => ({})))
+        const retried = pickLocal(Object.keys(await MCP.tools().catch(() => ({}))))
         if (retried.length > 0) return retried
         await new Promise((resolve) => setTimeout(resolve, 250))
       }
@@ -965,9 +971,6 @@ export function Prompt(props: PromptProps) {
                 autocomplete.onInput(value)
                 syncExtmarksWithPromptParts()
 
-                if (store.mode === "normal" && (value === "/tools" || value === "/tools ")) {
-                  command.trigger("prompt.tools")
-                }
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e) => {
