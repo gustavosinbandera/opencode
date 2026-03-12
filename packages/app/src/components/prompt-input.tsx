@@ -49,7 +49,7 @@ import {
   promptLength,
 } from "./prompt-input/history"
 import { createPromptSubmit } from "./prompt-input/submit"
-import { PromptPopover, type AtOption, type SlashCommand } from "./prompt-input/slash-popover"
+import { PromptPopover, type AtOption, type SlashCommand, type ToolOption } from "./prompt-input/slash-popover"
 import { PromptContextItems } from "./prompt-input/context-items"
 import { PromptImageAttachments } from "./prompt-input/image-attachments"
 import { PromptDragOverlay } from "./prompt-input/drag-overlay"
@@ -237,7 +237,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   )
 
   const [store, setStore] = createStore<{
-    popover: "at" | "slash" | null
+    popover: "at" | "slash" | "tool" | null
     historyIndex: number
     savedPrompt: PromptHistoryEntry | null
     placeholder: number
@@ -601,6 +601,56 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onSelect: handleSlashSelect,
   })
 
+  const toolListCache = new Map<string, ToolOption[]>()
+  const getToolList = async () => {
+    const model = local.model.current()
+    if (!model) return []
+    const key = `${sdk.directory}:${model.provider.id}:${model.id}`
+    const cached = toolListCache.get(key)
+    if (cached) return cached
+
+    const detailed = await sdk.client.tool
+      .list({
+        provider: model.provider.id,
+        model: model.id,
+      })
+      .then((x) => x.data ?? [])
+      .catch(() => undefined)
+
+    if (detailed && detailed.length > 0) {
+      const result = detailed.map((item) => ({ id: item.id, description: item.description }))
+      toolListCache.set(key, result)
+      return result
+    }
+
+    const ids = await sdk.client.tool.ids().then((x) => x.data ?? [])
+    const fallback = ids.map((id) => ({ id }))
+    toolListCache.set(key, fallback)
+    return fallback
+  }
+
+  const handleToolSelect = (tool: ToolOption | undefined) => {
+    if (!tool) return
+    closePopover()
+    const text = `/tool ${tool.id} `
+    setEditorText(text)
+    prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
+    focusEditorEnd()
+  }
+
+  const {
+    flat: toolFlat,
+    active: toolActive,
+    setActive: setToolActive,
+    onInput: toolOnInput,
+    onKeyDown: toolOnKeyDown,
+  } = useFilteredList<ToolOption>({
+    items: async () => getToolList(),
+    key: (x) => x?.id,
+    filterKeys: ["id", "description"],
+    onSelect: handleToolSelect,
+  })
+
   const createPill = (part: FileAttachmentPart | AgentPart) => {
     const pill = document.createElement("span")
     pill.textContent = part.content
@@ -677,6 +727,15 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       const active = slashActive()
       const item = items.find((entry) => entry.id === active) ?? items[0]
       handleSlashSelect(item)
+      return
+    }
+
+    if (store.popover === "tool") {
+      const items = toolFlat()
+      if (items.length === 0) return
+      const active = toolActive()
+      const item = items.find((entry) => entry.id === active) ?? items[0]
+      handleToolSelect(item)
     }
   }
 
@@ -811,10 +870,14 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!shellMode) {
       const atMatch = rawText.substring(0, cursorPosition).match(/@(\S*)$/)
       const slashMatch = rawText.match(/^\/(\S*)$/)
+      const toolMatch = rawText.match(/^\/tools(?:\s+(\S*))?$/)
 
       if (atMatch) {
         atOnInput(atMatch[1])
         setStore("popover", "at")
+      } else if (toolMatch) {
+        toolOnInput(toolMatch[1] ?? "")
+        setStore("popover", "tool")
       } else if (slashMatch) {
         slashOnInput(slashMatch[1])
         setStore("popover", "slash")
@@ -1083,6 +1146,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         }
         if (store.popover === "slash") {
           slashOnKeyDown(event)
+          event.preventDefault()
+          return
+        }
+        if (store.popover === "tool") {
+          toolOnKeyDown(event)
         }
         event.preventDefault()
         return
@@ -1140,6 +1208,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         slashActive={slashActive() ?? undefined}
         setSlashActive={setSlashActive}
         onSlashSelect={handleSlashSelect}
+        toolFlat={toolFlat()}
+        toolActive={toolActive() ?? undefined}
+        setToolActive={setToolActive}
+        onToolSelect={handleToolSelect}
         commandKeybind={command.keybind}
         t={(key) => language.t(key as Parameters<typeof language.t>[0])}
       />

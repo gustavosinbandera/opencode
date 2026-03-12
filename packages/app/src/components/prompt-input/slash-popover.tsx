@@ -17,8 +17,13 @@ export interface SlashCommand {
   source?: "command" | "mcp" | "skill"
 }
 
+export interface ToolOption {
+  id: string
+  description?: string
+}
+
 type PromptPopoverProps = {
-  popover: "at" | "slash" | null
+  popover: "at" | "slash" | "tool" | null
   setSlashPopoverRef: (el: HTMLDivElement) => void
   atFlat: AtOption[]
   atActive?: string
@@ -29,6 +34,10 @@ type PromptPopoverProps = {
   slashActive?: string
   setSlashActive: (id: string) => void
   onSlashSelect: (item: SlashCommand) => void
+  toolFlat: ToolOption[]
+  toolActive?: string
+  setToolActive: (id: string) => void
+  onToolSelect: (item: ToolOption) => void
   commandKeybind: (id: string) => string | undefined
   t: (key: string) => string
 }
@@ -127,6 +136,30 @@ export const PromptPopover: Component<PromptPopoverProps> = (props) => {
                       </Show>
                       <Show when={props.commandKeybind(cmd.id)}>
                         <span class="text-12-regular text-text-subtle">{props.commandKeybind(cmd.id)}</span>
+                      </Show>
+                    </div>
+                  </button>
+                )}
+              </For>
+            </Show>
+          </Match>
+          <Match when={props.popover === "tool"}>
+            <Show when={props.toolFlat.length > 0} fallback={<div class="text-text-weak px-2 py-1">No tools found</div>}>
+              <For each={props.toolFlat}>
+                {(tool) => (
+                  <button
+                    data-tool-id={tool.id}
+                    classList={{
+                      "w-full flex items-center justify-between gap-4 rounded-md px-2 py-1": true,
+                      "bg-surface-raised-base-hover": props.toolActive === tool.id,
+                    }}
+                    onClick={() => props.onToolSelect(tool)}
+                    onMouseEnter={() => props.setToolActive(tool.id)}
+                  >
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-14-regular text-text-strong whitespace-nowrap">{tool.id}</span>
+                      <Show when={tool.description}>
+                        <span class="text-14-regular text-text-weak truncate">{tool.description}</span>
                       </Show>
                     </div>
                   </button>
