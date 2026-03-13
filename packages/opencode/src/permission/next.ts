@@ -338,7 +338,7 @@ export namespace PermissionNext {
     }
   }
 
-  const EDIT_TOOLS = ["edit", "write", "patch", "multiedit"]
+  const EDIT_TOOLS = ["edit", "write", "patch", "multiedit", "apply_patch"]
 
   export function disabled(tools: string[], ruleset: Ruleset): Set<string> {
     const result = new Set<string>()

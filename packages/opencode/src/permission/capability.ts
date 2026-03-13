@@ -12,6 +12,18 @@ export namespace Capability {
   }
 
   const NATIVE: Record<string, Omit<Info, "id" | "permission">> = {
+    invalid: {
+      source: "native",
+      risk: "low",
+      defaultAction: "allow",
+      description: "Fallback invalid tool handler used to surface unsupported tool invocations.",
+    },
+    question: {
+      source: "native",
+      risk: "low",
+      defaultAction: "allow",
+      description: "Interactive clarification questions for user input and decisions.",
+    },
     read: {
       source: "native",
       risk: "low",
@@ -29,6 +41,24 @@ export namespace Capability {
       risk: "low",
       defaultAction: "allow",
       description: "Source content search operations.",
+    },
+    webfetch: {
+      source: "native",
+      risk: "medium",
+      defaultAction: "allow",
+      description: "Read-only remote content retrieval over HTTP(S).",
+    },
+    websearch: {
+      source: "native",
+      risk: "medium",
+      defaultAction: "allow",
+      description: "Remote web search capability for evidence gathering.",
+    },
+    codesearch: {
+      source: "native",
+      risk: "medium",
+      defaultAction: "allow",
+      description: "Indexed code search capability across configured sources.",
     },
     bash: {
       source: "native",
@@ -48,11 +78,35 @@ export namespace Capability {
       defaultAction: "ask",
       description: "File creation and overwrite operations.",
     },
+    batch: {
+      source: "native",
+      risk: "high",
+      defaultAction: "ask",
+      description: "Batch execution of multiple tool calls in one request.",
+    },
     apply_patch: {
       source: "native",
       risk: "high",
       defaultAction: "ask",
       description: "Patch application over workspace files.",
+    },
+    skill: {
+      source: "native",
+      risk: "medium",
+      defaultAction: "allow",
+      description: "Skill loading and invocation for reusable workflows.",
+    },
+    lsp: {
+      source: "native",
+      risk: "medium",
+      defaultAction: "allow",
+      description: "Language server analysis and editor-style code intelligence.",
+    },
+    plan_exit: {
+      source: "native",
+      risk: "low",
+      defaultAction: "allow",
+      description: "Exit from plan mode and resume normal execution.",
     },
     task: {
       source: "native",
