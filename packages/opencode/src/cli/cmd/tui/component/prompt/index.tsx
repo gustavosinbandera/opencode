@@ -801,6 +801,38 @@ export function Prompt(props: PromptProps) {
         return
       }
 
+      if (/^\d+$/.test(objective)) {
+        const out = await sdk.client.mcp
+          .callTool({
+            tool: toolName,
+            args: {
+              work_item_id: Number(objective),
+              mode: "compact",
+            },
+          })
+          .then((x: { data?: { output?: string } }) => x.data?.output)
+          .catch((err: unknown) => `MCP tool call failed: ${err instanceof Error ? err.message : String(err)}`)
+
+        toast.show({
+          variant: "info",
+          message: out || "MCP tool returned no output.",
+          duration: 9000,
+        })
+        history.append({
+          ...store.prompt,
+          mode: store.mode,
+        })
+        input.extmarks.clear()
+        setStore("prompt", {
+          input: "",
+          parts: [],
+        })
+        setStore("extmarkToPartIndex", new Map())
+        props.onSubmit?.()
+        input.clear()
+        return
+      }
+
       inputText = [
         `Use the MCP tool \`${toolName}\` to complete this objective:`,
         objective,

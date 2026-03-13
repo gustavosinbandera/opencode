@@ -608,6 +608,16 @@ export function Autocomplete(props: {
               !value.startsWith("/tools "))
           ) {
             hide()
+            return
+          }
+
+          if (toolsMode) {
+            const text = value.slice(store.index + 1, props.input().cursorOffset)
+            const parts = text.split(" ")
+            if (parts.length >= 2) {
+              hide()
+              return
+            }
           }
           return
         }

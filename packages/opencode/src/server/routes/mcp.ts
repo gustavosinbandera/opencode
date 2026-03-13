@@ -40,6 +40,56 @@ export const McpRoutes = lazy(() =>
         return c.json(filtered)
       },
     )
+    .post(
+      "/call",
+      describeRoute({
+        summary: "Call MCP tool",
+        description: "Execute an MCP tool from the live worker-backed registry.",
+        operationId: "mcp.callTool",
+        responses: {
+          200: {
+            description: "MCP tool result",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    output: z.string(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          tool: z.string(),
+          args: z.record(z.string(), z.any()).optional(),
+        }),
+      ),
+      async (c) => {
+        const body = c.req.valid("json")
+        const tool = (await MCP.tools())[body.tool]
+        if (!tool?.execute) return c.json({ error: `MCP tool not found: ${body.tool}` }, 400)
+        const result = await tool.execute(body.args ?? {}, {
+          messages: [],
+          abortSignal: c.req.raw.signal,
+          toolCallId: `mcp-call-${Date.now()}`,
+        })
+        const output = (result.content ?? [])
+          .flatMap((item: { type: string; text?: string; resource?: { text?: string } }) => {
+            if (item.type === "text" && item.text) return [item.text]
+            if (item.type === "resource" && item.resource?.text) return [item.resource.text]
+            return []
+          })
+          .join("\n\n")
+        return c.json({
+          output: output || JSON.stringify(result.structuredContent ?? result, null, 2),
+        })
+      },
+    )
     .get(
       "/",
       describeRoute({
