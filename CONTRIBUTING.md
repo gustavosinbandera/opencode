@@ -75,6 +75,7 @@ Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).
   - `packages/app`: The shared web UI components, written in SolidJS
   - `packages/desktop`: The native desktop app, built with Tauri (wraps `packages/app`)
   - `packages/plugin`: Source for `@opencode-ai/plugin`
+  - Other monorepo packages: `packages/console` (console backend & app), `packages/web` (docs site), `packages/sdk/js` (JS/TS SDK), `packages/ui` (shared UI components).
 
 ### Understanding bun dev vs opencode
 
@@ -119,7 +120,7 @@ To test UI changes during development:
 bun run --cwd packages/app dev
 ```
 
-This starts a local dev server at http://localhost:5173 (or similar port shown in output). Most UI changes can be tested here, but the server must be running for full functionality.
+This starts a local dev server at http://localhost:3000 (port 3000 is set in `packages/app/vite.config.ts`; the output may show the exact URL). Most UI changes can be tested here, but the server must be running for full functionality. Note: the **Console app** (`packages/console/app`) uses Vite's default port (e.g. 5173) when run separately.
 
 ### Running the Desktop App
 

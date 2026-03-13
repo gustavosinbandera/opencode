@@ -58,11 +58,13 @@ import type {
   McpAuthRemoveResponses,
   McpAuthStartErrors,
   McpAuthStartResponses,
+  McpCallToolResponses,
   McpConnectResponses,
   McpDisconnectResponses,
   McpLocalConfig,
   McpRemoteConfig,
   McpStatusResponses,
+  McpToolsResponses,
   OutputFormat,
   Part as Part2,
   PartDeleteErrors,
@@ -3008,6 +3010,77 @@ export class Mcp extends HeyApiClient {
       url: "/mcp",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * List MCP tool ids
+   *
+   * Return MCP tool ids from the live MCP registry used by the server worker.
+   */
+  public tools<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      scope?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "scope" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<McpToolsResponses, unknown, ThrowOnError>({
+      url: "/mcp/tools",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Call MCP tool
+   *
+   * Execute an MCP tool from the live worker-backed registry.
+   */
+  public callTool<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      tool?: string
+      args?: Record<string, unknown>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "tool" },
+            { in: "body", key: "args" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<McpCallToolResponses, unknown, ThrowOnError>({
+      url: "/mcp/call",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

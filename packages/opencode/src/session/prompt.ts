@@ -35,6 +35,7 @@ import { Command } from "../command"
 import { $ } from "bun"
 import { pathToFileURL, fileURLToPath } from "url"
 import { ConfigMarkdown } from "../config/markdown"
+import { Config } from "../config/config"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@opencode-ai/util/error"
 import { fn } from "@/util/fn"
@@ -48,6 +49,7 @@ import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
 import { decodeDataUrl } from "@/util/data-url"
+import { Policy } from "@/policy/engine"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -436,8 +438,16 @@ export namespace SessionPrompt {
             } satisfies MessageV2.ToolPart)) as MessageV2.ToolPart
           },
           async ask(req) {
+            const cfg = await Config.get()
+            const profile = cfg.policy?.profile ?? "strict"
+            const intent = Policy.fromMessages(msgs)
             await PermissionNext.ask({
               ...req,
+              metadata: {
+                ...(req.metadata ?? {}),
+                intent,
+                profile,
+              },
               sessionID: sessionID,
               ruleset: PermissionNext.merge(taskAgent.permission, session.permission ?? []),
             })
@@ -752,6 +762,9 @@ export namespace SessionPrompt {
   }) {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
+    const cfg = await Config.get()
+    const profile = cfg.policy?.profile ?? "strict"
+    const intent = Policy.fromMessages(input.messages)
 
     const context = (args: any, options: ToolCallOptions): Tool.Context => ({
       sessionID: input.session.id,
@@ -779,8 +792,14 @@ export namespace SessionPrompt {
         }
       },
       async ask(req) {
+        const metadata = {
+          ...(req.metadata ?? {}),
+          intent,
+          profile,
+        }
         await PermissionNext.ask({
           ...req,
+          metadata,
           sessionID: input.session.id,
           tool: { messageID: input.processor.message.id, callID: options.toolCallId },
           ruleset: PermissionNext.merge(input.agent.permission, input.session.permission ?? []),

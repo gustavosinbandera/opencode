@@ -20,12 +20,13 @@ const storedSessions: Record<string, Array<{ id: string; title?: string }>> = {}
 const promoted: Array<{ directory: string; sessionID: string }> = []
 const sentShell: string[] = []
 const syncedDirectories: string[] = []
+const toasts: Array<{ title?: string; description?: string }> = []
+const promptAsyncCalls: Array<{ sessionID: string; parts: any[] }> = []
 
 let params: { id?: string } = {}
 let selected = "/repo/worktree-a"
 let variant: string | undefined
-
-const promptValue: Prompt = [{ type: "text", content: "ls", start: 0, end: 2 }]
+let promptValue: Prompt = [{ type: "text", content: "ls", start: 0, end: 2 }]
 
 const clientFor = (directory: string) => {
   createdClients.push(directory)
@@ -45,9 +46,29 @@ const clientFor = (directory: string) => {
         return { data: undefined }
       },
       prompt: async () => ({ data: undefined }),
-      promptAsync: async () => ({ data: undefined }),
+      promptAsync: async (input: { sessionID: string; parts: any[] }) => {
+        promptAsyncCalls.push({ sessionID: input.sessionID, parts: input.parts })
+        return { data: undefined }
+      },
       command: async () => ({ data: undefined }),
       abort: async () => ({ data: undefined }),
+    },
+    tool: {
+      ids: async () => ({ data: ["read", "bash", "usar-mcp_azure_get_work_item"] }),
+      list: async () => ({
+        data: [
+          {
+            id: "read",
+            description: "Read files from the workspace.",
+            parameters: {
+              type: "object",
+              properties: {
+                filePath: { description: "Absolute or relative file path" },
+              },
+            },
+          },
+        ],
+      }),
     },
     worktree: {
       create: async () => ({ data: { directory: `${directory}/new` } }),
@@ -71,7 +92,10 @@ beforeAll(async () => {
   }))
 
   mock.module("@opencode-ai/ui/toast", () => ({
-    showToast: () => 0,
+    showToast: (input: { title?: string; description?: string }) => {
+      toasts.push(input)
+      return 0
+    },
   }))
 
   mock.module("@opencode-ai/util/encode", () => ({
@@ -211,6 +235,9 @@ beforeEach(() => {
   params = {}
   sentShell.length = 0
   syncedDirectories.length = 0
+  toasts.length = 0
+  promptAsyncCalls.length = 0
+  promptValue = [{ type: "text", content: "ls", start: 0, end: 2 }]
   selected = "/repo/worktree-a"
   variant = undefined
   for (const key of Object.keys(storedSessions)) delete storedSessions[key]
@@ -342,5 +369,92 @@ describe("prompt submit worktree selection", () => {
 
     expect(storedSessions["/repo/worktree-a"]).toEqual([{ id: "session-1", title: "New session 1" }])
     expect(optimisticSeeded).toEqual([true])
+  })
+
+  test("shows tool help when using /tool <name> --help", async () => {
+    params = { id: "session-1" }
+    promptValue = [{ type: "text", content: "/tool read --help", start: 0, end: 17 }]
+
+    const submit = createPromptSubmit({
+      info: () => ({ id: "session-1" }),
+      imageAttachments: () => [],
+      commentCount: () => 0,
+      autoAccept: () => false,
+      mode: () => "normal",
+      working: () => false,
+      editor: () => undefined,
+      queueScroll: () => undefined,
+      promptLength: (value) => value.reduce((sum, part) => sum + ("content" in part ? part.content.length : 0), 0),
+      addToHistory: () => undefined,
+      resetHistoryNavigation: () => undefined,
+      setMode: () => undefined,
+      setPopover: () => undefined,
+      onSubmit: () => undefined,
+    })
+
+    const event = { preventDefault: () => undefined } as unknown as Event
+    await submit.handleSubmit(event)
+
+    expect(toasts.some((x) => x.title?.includes("Tool help: read"))).toBe(true)
+    expect(promptAsyncCalls).toHaveLength(0)
+  })
+
+  test("transforms /tool objective into tool-guided prompt", async () => {
+    params = { id: "session-1" }
+    promptValue = [{ type: "text", content: "/tool read inspect src/index.ts", start: 0, end: 31 }]
+
+    const submit = createPromptSubmit({
+      info: () => ({ id: "session-1" }),
+      imageAttachments: () => [],
+      commentCount: () => 0,
+      autoAccept: () => false,
+      mode: () => "normal",
+      working: () => false,
+      editor: () => undefined,
+      queueScroll: () => undefined,
+      promptLength: (value) => value.reduce((sum, part) => sum + ("content" in part ? part.content.length : 0), 0),
+      addToHistory: () => undefined,
+      resetHistoryNavigation: () => undefined,
+      setMode: () => undefined,
+      setPopover: () => undefined,
+      onSubmit: () => undefined,
+    })
+
+    const event = { preventDefault: () => undefined } as unknown as Event
+    await submit.handleSubmit(event)
+
+    expect(promptAsyncCalls).toHaveLength(1)
+    const payload = JSON.stringify(promptAsyncCalls[0].parts)
+    expect(payload.includes("Use the tool `read` to complete this objective:")).toBe(true)
+    expect(payload.includes("inspect src/index.ts")).toBe(true)
+  })
+
+  test("shows suggestion when /tool name is unknown", async () => {
+    params = { id: "session-1" }
+    promptValue = [{ type: "text", content: "/tool rea check file", start: 0, end: 20 }]
+
+    const submit = createPromptSubmit({
+      info: () => ({ id: "session-1" }),
+      imageAttachments: () => [],
+      commentCount: () => 0,
+      autoAccept: () => false,
+      mode: () => "normal",
+      working: () => false,
+      editor: () => undefined,
+      queueScroll: () => undefined,
+      promptLength: (value) => value.reduce((sum, part) => sum + ("content" in part ? part.content.length : 0), 0),
+      addToHistory: () => undefined,
+      resetHistoryNavigation: () => undefined,
+      setMode: () => undefined,
+      setPopover: () => undefined,
+      onSubmit: () => undefined,
+    })
+
+    const event = { preventDefault: () => undefined } as unknown as Event
+    await submit.handleSubmit(event)
+
+    expect(toasts.some((x) => x.title?.includes("Unknown tool: rea"))).toBe(true)
+    expect(toasts.some((x) => x.description?.includes("Did you mean"))).toBe(true)
+    expect(promptAsyncCalls).toHaveLength(0)
   })
 })

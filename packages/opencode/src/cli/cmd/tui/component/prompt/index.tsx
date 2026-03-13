@@ -11,6 +11,8 @@ import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { MessageID, PartID } from "@/session/schema"
 import { createStore, produce } from "solid-js/store"
+import { loadMcpDebugInfo, loadMcpToolIDs, loadNativeToolIDs } from "./mcp-catalog"
+import { resolveMcpArgs, summarizeToolParameters } from "./mcp-command"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
 import { usePromptStash } from "./stash"
@@ -24,7 +26,6 @@ import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@opencode-ai/sdk/v2"
 import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
-import { Locale } from "@/util/locale"
 import { formatDuration } from "@/util/format"
 import { createColors, createFrames } from "../../ui/spinner.ts"
 import { useDialog } from "@tui/ui/dialog"
@@ -331,6 +332,43 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
+        title: "Use tool",
+        value: "prompt.tool",
+        category: "Prompt",
+        slash: {
+          name: "tool",
+        },
+        onSelect: (dialog) => {
+          dialog.clear()
+          input.setText("/tool ")
+          setStore("prompt", {
+            input: "/tool ",
+            parts: [],
+          })
+          input.gotoBufferEnd()
+          autocomplete.onInput("/tool ")
+        },
+      },
+      {
+        title: "Browse MCP tools",
+        value: "prompt.mcp_tools",
+        category: "Prompt",
+        slash: {
+          name: "mcp-tools",
+          aliases: ["tools"],
+        },
+        onSelect: (dialog) => {
+          dialog.clear()
+          input.setText("/mcp-tools ")
+          setStore("prompt", {
+            input: "/mcp-tools ",
+            parts: [],
+          })
+          input.gotoBufferEnd()
+          autocomplete.onInput("/mcp-tools ")
+        },
+      },
+      {
         title: "Skills",
         value: "prompt.skills",
         category: "Prompt",
@@ -563,6 +601,223 @@ export function Prompt(props: PromptProps) {
 
     const messageID = MessageID.ascending()
     let inputText = store.prompt.input
+
+    if (inputText.startsWith("/tool ")) {
+      const [, toolName = "", ...rest] = inputText.split(" ")
+      const objective = rest.join(" ").trim()
+
+      if (!toolName) {
+        toast.show({
+          variant: "warning",
+          message: "Tool name is required. Use /tool <tool_name> <objective>.",
+          duration: 3500,
+        })
+        return
+      }
+
+      const available = await loadNativeToolIDs(sdk)
+
+      if (!toolName || !available.includes(toolName)) {
+        const typed = toolName.toLowerCase()
+        const suggestions = available
+          .filter((id: string) => {
+            const candidate = id.toLowerCase()
+            return candidate.includes(typed) || typed.includes(candidate)
+          })
+          .slice(0, 5)
+        toast.show({
+          variant: "warning",
+          message:
+            suggestions.length > 0
+              ? `Unknown tool: ${toolName}. Did you mean: ${suggestions.join(", ")}`
+              : `Unknown tool: ${toolName}. Use /mcp-tools for MCP tools or /tool for native tools.`,
+          duration: 4500,
+        })
+        return
+      }
+
+      if (objective === "--help") {
+        toast.show({
+          variant: "info",
+          message: `Tool help: ${toolName}\nScope: native\nDescription: Native tool help is not exposed in this view. Use tool docs or run the action directly.\nArguments:\n- see native tool schema`,
+          duration: 6500,
+        })
+        return
+      }
+
+      if (!objective) {
+        toast.show({
+          variant: "warning",
+          message: "Tool objective is required. Use /tool <tool_name> <objective> or /tool <tool_name> --help.",
+          duration: 4500,
+        })
+        return
+      }
+
+      inputText = [
+        `Use the tool \`${toolName}\` to complete this objective:`,
+        objective,
+        "If permission is required, ask for it before execution.",
+      ].join("\n")
+    }
+
+    if (inputText === "/mcp-tools" || inputText === "/tools") {
+      const debug = await loadMcpDebugInfo(sdk)
+      toast.show({
+        variant: "info",
+        message: [
+          "MCP tools command",
+          "Use /mcp-tools <tool_name> <objective>",
+          "Use /mcp-tools <tool_name> --help",
+          "Use /mcp-tools --debug for diagnostics",
+          `tools loaded now: ${debug.direct.length}`,
+        ].join("\n"),
+        duration: 7000,
+      })
+      return
+    }
+
+    if (inputText.startsWith("/mcp-tools ") || inputText.startsWith("/tools ")) {
+      const normalized = inputText.startsWith("/tools ") ? inputText.replace("/tools ", "/mcp-tools ") : inputText
+      const [, toolName = "", ...rest] = normalized.split(" ")
+      const objective = rest.join(" ").trim()
+
+      if (toolName === "--debug") {
+        const debug = await loadMcpDebugInfo(sdk)
+        const preview = debug.direct.slice(0, 12)
+        toast.show({
+          variant: "info",
+          message: [
+            `MCP debug`,
+            `configured: ${debug.configured.join(", ") || "none"}`,
+            `connected: ${debug.connected.join(", ") || "none"}`,
+            `local: ${debug.local.join(", ") || "none"}`,
+            `tools loaded: ${debug.direct.length}`,
+            preview.length > 0 ? `sample: ${preview.join(", ")}` : "sample: none",
+          ].join("\n"),
+          duration: 9000,
+        })
+        return
+      }
+
+      if (!toolName) {
+        const debug = await loadMcpDebugInfo(sdk)
+        toast.show({
+          variant: "info",
+          message: [
+            "MCP tools command",
+            "Use /mcp-tools <tool_name> <objective>",
+            "Use /mcp-tools <tool_name> --help",
+            "Use /mcp-tools --debug for diagnostics",
+            `tools loaded now: ${debug.direct.length}`,
+          ].join("\n"),
+          duration: 7000,
+        })
+        return
+      }
+
+      const mcpTools = await loadMcpToolIDs(sdk)
+      if (!mcpTools.includes(toolName)) {
+        const debug = await loadMcpDebugInfo(sdk)
+        const typed = toolName.toLowerCase()
+        const suggestions = mcpTools
+          .filter((id: string) => {
+            const candidate = id.toLowerCase()
+            return candidate.includes(typed) || typed.includes(candidate)
+          })
+          .slice(0, 5)
+        toast.show({
+          variant: "warning",
+          message:
+            suggestions.length > 0
+              ? `Unknown MCP tool: ${toolName}. Did you mean: ${suggestions.join(", ")}`
+              : [
+                  `Unknown MCP tool: ${toolName}`,
+                  "Type /mcp-tools and pick from autocomplete.",
+                  `loaded tools: ${debug.direct.length}`,
+                  debug.direct.length > 0 ? `sample: ${debug.direct.slice(0, 10).join(", ")}` : "sample: none",
+                ].join("\n"),
+          duration: 9000,
+        })
+        return
+      }
+
+      const details = selectedModel
+        ? await sdk.client.tool
+            .list({ provider: selectedModel.providerID, model: selectedModel.modelID })
+            .then((x) => (x.data ?? []) as Array<{ id: string; description?: string; parameters?: unknown }>)
+            .catch(() => [] as Array<{ id: string; description?: string; parameters?: unknown }>)
+        : []
+      const selected = details.find((item) => item.id === toolName)
+
+      if (objective === "--help") {
+        const description = selected?.description || "No dedicated help text is available for this MCP tool."
+        const args = summarizeToolParameters(selected?.parameters)
+        toast.show({
+          variant: "info",
+          message: `Tool help: ${toolName}\nScope: mcp\nDescription: ${description}\nArguments:\n${args}`,
+          duration: 6500,
+        })
+        return
+      }
+
+      if (!objective) {
+        toast.show({
+          variant: "warning",
+          message: "Tool objective is required. Use /mcp-tools <tool_name> <objective> or /mcp-tools <tool_name> --help.",
+          duration: 4500,
+        })
+        return
+      }
+
+      const resolved = resolveMcpArgs(toolName, objective, selected?.parameters)
+      if (resolved.error) {
+        toast.show({
+          variant: "warning",
+          message: [
+            resolved.error,
+            "Tip: pass JSON args like /mcp-tools <tool> {\"work_item_id\":123,\"mode\":\"analysis\"}",
+          ].join("\n"),
+          duration: 9000,
+        })
+        return
+      }
+
+      if (resolved.args) {
+        const out = await sdk.client.mcp
+          .callTool({
+            tool: toolName,
+            args: resolved.args,
+          })
+          .then((x: { data?: { output?: string } }) => x.data?.output)
+          .catch((err: unknown) => `MCP tool call failed: ${err instanceof Error ? err.message : String(err)}`)
+
+        toast.show({
+          variant: "info",
+          message: out || "MCP tool returned no output.",
+          duration: 9000,
+        })
+        history.append({
+          ...store.prompt,
+          mode: store.mode,
+        })
+        input.extmarks.clear()
+        setStore("prompt", {
+          input: "",
+          parts: [],
+        })
+        setStore("extmarkToPartIndex", new Map())
+        props.onSubmit?.()
+        input.clear()
+        return
+      }
+
+      inputText = [
+        `Use the MCP tool \`${toolName}\` to complete this objective:`,
+        objective,
+        "If permission is required, ask for it before execution.",
+      ].join("\n")
+    }
 
     // Expand pasted text inline before submitting
     const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
@@ -845,6 +1100,7 @@ export function Prompt(props: PromptProps) {
                 setStore("prompt", "input", value)
                 autocomplete.onInput(value)
                 syncExtmarksWithPromptParts()
+
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e) => {
@@ -1013,9 +1269,7 @@ export function Prompt(props: PromptProps) {
               syntaxStyle={syntax()}
             />
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
-              <text fg={highlight()}>
-                {store.mode === "shell" ? "Shell" : Locale.titlecase(local.agent.current().name)}{" "}
-              </text>
+              <text fg={highlight()}>{store.mode === "shell" ? "Shell" : "Magaya Agent"} </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>
                   <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>

@@ -13,6 +13,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
+import { loadMcpDebugInfo, loadMcpToolIDs } from "./mcp-catalog"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
@@ -90,6 +91,16 @@ export function Autocomplete(props: {
   })
 
   const [positionTick, setPositionTick] = createSignal(0)
+  const [mcpToolCache, setMcpToolCache] = createSignal<string[]>([])
+
+  const resolveMcpToolIDs = async () => {
+    const ids = await loadMcpToolIDs(sdk)
+    if (ids.length > 0) {
+      setMcpToolCache(ids)
+      return ids
+    }
+    return mcpToolCache()
+  }
 
   createEffect(() => {
     if (store.visible) {
@@ -382,31 +393,99 @@ export function Autocomplete(props: {
     }))
   })
 
+  const [tools] = createResource(
+    () => search(),
+    async () => {
+      if (!store.visible || store.visible !== "/") return []
+      const ids = await resolveMcpToolIDs()
+
+      if (ids.length === 0) {
+        const debug = await loadMcpDebugInfo(sdk)
+
+        return [
+          {
+            display: "No MCP tools loaded",
+            value: "__mcp_empty__",
+            description: `configured=${debug.configured.length} connected=${debug.connected.length}`,
+            disabled: true,
+          },
+          {
+            display: "Run /mcp-tools --debug",
+            value: "__mcp_debug__",
+            description: "Insert debug command to inspect MCP status",
+            onSelect: () => {
+              const newText = "/mcp-tools --debug"
+              const cursor = props.input().logicalCursor
+              props.input().deleteRange(0, 0, cursor.row, cursor.col)
+              props.input().insertText(newText)
+              props.input().cursorOffset = Bun.stringWidth(newText)
+            },
+          },
+        ]
+      }
+
+      return ids
+        .map(
+          (id: string): AutocompleteOption => ({
+            display: id,
+            value: id,
+            onSelect: () => {
+              const newText = `/mcp-tools ${id} `
+              const cursor = props.input().logicalCursor
+              props.input().deleteRange(0, 0, cursor.row, cursor.col)
+              props.input().insertText(newText)
+              props.input().cursorOffset = Bun.stringWidth(newText)
+            },
+          }),
+        )
+        .sort((a: AutocompleteOption, b: AutocompleteOption) => a.display.localeCompare(b.display))
+    },
+    {
+      initialValue: [] as AutocompleteOption[],
+    },
+  )
+
+  onMount(() => {
+    resolveMcpToolIDs().catch(() => undefined)
+  })
+
   const options = createMemo((prev: AutocompleteOption[] | undefined) => {
     const filesValue = files()
     const agentsValue = agents()
     const commandsValue = commands()
+    const searchValue = search()
+
+    const toolsQuery =
+      store.visible === "/" && (searchValue.startsWith("mcp-tools") || searchValue.startsWith("tools"))
+    const toolFilter = toolsQuery ? searchValue.replace(/^(mcp-tools|tools)\s*/, "") : ""
 
     const mixed: AutocompleteOption[] =
-      store.visible === "@" ? [...agentsValue, ...(filesValue || []), ...mcpResources()] : [...commandsValue]
-
-    const searchValue = search()
+      store.visible === "@"
+        ? [...agentsValue, ...(filesValue || []), ...mcpResources()]
+        : toolsQuery
+          ? [...tools()]
+          : [...commandsValue]
 
     if (!searchValue) {
       return mixed
+    }
+
+    // Show a larger MCP tool window when no filter so a local server catalog remains discoverable.
+    if (toolsQuery && !toolFilter) {
+      return mixed.slice(0, 80)
     }
 
     if (files.loading && prev && prev.length > 0) {
       return prev
     }
 
-    const result = fuzzysort.go(removeLineRange(searchValue), mixed, {
+    const result = fuzzysort.go(removeLineRange(toolsQuery ? toolFilter : searchValue), mixed, {
       keys: [
         (obj) => removeLineRange((obj.value ?? obj.display).trimEnd()),
         "description",
         (obj) => obj.aliases?.join(" ") ?? "",
       ],
-      limit: 10,
+      limit: toolsQuery ? 80 : 10,
       scoreFn: (objResults) => {
         const displayResult = objResults[0]
         let score = objResults.score
@@ -452,6 +531,15 @@ export function Autocomplete(props: {
     if (!selected) return
     hide()
     selected.onSelect?.()
+
+    const text = props.input().plainText
+    if (text.startsWith("/mcp-tools") || text.startsWith("/tools")) {
+      props.setPrompt((draft) => {
+        draft.input = text
+      })
+      show("/")
+      setStore("index", 0)
+    }
   }
 
   function expandDirectory() {
@@ -504,15 +592,29 @@ export function Autocomplete(props: {
       },
       onInput(value) {
         if (store.visible) {
+          const toolsMode = store.visible === "/" && (value.startsWith("/mcp-tools") || value.startsWith("/tools"))
           if (
             // Typed text before the trigger
             props.input().cursorOffset <= store.index ||
             // There is a space between the trigger and the cursor
-            props.input().getTextRange(store.index, props.input().cursorOffset).match(/\s/) ||
+            (!toolsMode && props.input().getTextRange(store.index, props.input().cursorOffset).match(/\s/)) ||
             // "/<command>" is not the sole content
-            (store.visible === "/" && value.match(/^\S+\s+\S+\s*$/))
+            (store.visible === "/" &&
+              value.match(/^\S+\s+\S+\s*$/) &&
+              !value.startsWith("/mcp-tools ") &&
+              !value.startsWith("/tools "))
           ) {
             hide()
+            return
+          }
+
+          if (toolsMode) {
+            const text = value.slice(store.index + 1, props.input().cursorOffset)
+            const parts = text.split(" ")
+            if (parts.length >= 2) {
+              hide()
+              return
+            }
           }
           return
         }

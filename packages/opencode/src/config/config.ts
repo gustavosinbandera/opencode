@@ -691,6 +691,21 @@ export namespace Config {
     })
   export type Permission = z.infer<typeof Permission>
 
+  export const PolicyProfile = z.enum(["strict", "balanced", "fast"]).meta({
+    ref: "PolicyProfileConfig",
+  })
+  export type PolicyProfile = z.infer<typeof PolicyProfile>
+
+  export const Policy = z
+    .object({
+      profile: PolicyProfile.optional().describe("Runtime policy profile for tool execution controls."),
+    })
+    .strict()
+    .meta({
+      ref: "PolicyConfig",
+    })
+  export type Policy = z.infer<typeof Policy>
+
   export const Command = z.object({
     template: z.string(),
     description: z.string().optional(),
@@ -1183,6 +1198,7 @@ export namespace Config {
       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
       layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
       permission: Permission.optional(),
+      policy: Policy.optional(),
       tools: z.record(z.string(), z.boolean()).optional(),
       enterprise: z
         .object({
