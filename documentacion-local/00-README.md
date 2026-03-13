@@ -32,6 +32,7 @@ Este directorio concentra notas tecnicas locales para analizar el repositorio en
 - `09-package-desktop-code-map.md`: mapa tecnico de shells desktop.
 - `10-mcp-tools-autocomplete-diagnosis.md`: diagnostico y solucion propuesta para que /mcp-tools liste herramientas MCP en el autocomplete (causa, analisis, pruebas).
 - `11-mcp-server-proyecto-tools-y-exposicion.md`: resumen del proyecto MCP-SERVER (C:\PROYECTOS\MCP-SERVER): estructura, definicion/registro de tools, exposicion por protocolo MCP y REST, catálogo y descubrimiento.
+- `auditoria-docs-codigo/`: auditoria de coherencia documentacion vs codigo (5 agentes): reporte-code-a.md, reporte-code-b.md, reporte-docs-a.md, reporte-docs-b.md, REPORTE-CONSOLIDADO.md con plan de correcciones.
 - `plan-distribuido-4-agentes/`: plan de trabajo con roles e instrucciones por agente.
 - `adr/ADR-000-template.md`: plantilla de decision record.
 - `adr/ADR-001-docs-architecture-sources-of-truth.md`: decision inicial de fuentes de verdad.

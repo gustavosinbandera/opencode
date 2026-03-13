@@ -38,7 +38,7 @@ Autocomplete (autocomplete.tsx):
 |--------|-----|
 | `packages/opencode/src/cli/cmd/tui/component/prompt/autocomplete.tsx` | `resolveMcpToolIDs`, resource `[tools]`, opciones cuando `toolsQuery` |
 | `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` | Slash "mcp-tools", `loadMcpToolIDs`, submit de `/mcp-tools` |
-| `packages/opencode/src/server/routes/experimental.ts` | GET `/tool/ids` → `ToolRegistry.ids()` |
+| `packages/opencode/src/server/routes/experimental.ts` | GET `/experimental/tool/ids` → `ToolRegistry.ids()` |
 | `packages/opencode/src/tool/registry.ts` | `ToolRegistry.ids()`: solo built-in + custom + plugin |
 | `packages/opencode/src/mcp/index.ts` | `MCP.tools()`: clientes MCP en el proceso actual |
 
@@ -48,7 +48,7 @@ Autocomplete (autocomplete.tsx):
 
 ### 3.1 La API `tool.ids` no incluye herramientas MCP
 
-- **Dónde:** El endpoint `GET /tool/ids` (experimental) devuelve `ToolRegistry.ids()`.
+- **Dónde:** El endpoint `GET /experimental/tool/ids` devuelve `ToolRegistry.ids()`.
 - **Qué hace ToolRegistry.ids():** Devuelve IDs de herramientas built-in (bash, read, edit, …), custom (tool/*.ts) y de plugins. **No integra en ningún sitio las herramientas MCP.**
 - **Consecuencia:** En el TUI, `sdk.client.tool.ids()` nunca devuelve IDs MCP. La rama `fromStatus` en `resolveMcpToolIDs` siempre queda vacía.
 
@@ -91,12 +91,12 @@ return [InvalidTool, QuestionTool, BashTool, ReadTool, ...custom]
 
 ### Opción B: Incluir IDs MCP en ToolRegistry / en la respuesta de tool.ids
 
-**Idea:** Hacer que `ToolRegistry.ids()` (o el handler de `GET /tool/ids`) incluya también los IDs devueltos por `MCP.tools()` en el proceso del servidor.
+**Idea:** Hacer que `ToolRegistry.ids()` (o el handler de `GET /experimental/tool/ids`) incluya también los IDs devueltos por `MCP.tools()` en el proceso del servidor.
 
 **Cambios:**
 
 1. **Backend**
-   - En el handler de `GET /tool/ids`, algo como:  
+   - En el handler de `GET /experimental/tool/ids`, algo como:  
      `const registryIds = await ToolRegistry.ids()`  
      `const mcpIds = Object.keys(await MCP.tools())`  
      `return c.json([...registryIds, ...mcpIds])`  
@@ -160,7 +160,7 @@ return [InvalidTool, QuestionTool, BashTool, ReadTool, ...custom]
 
 - **API:** Test de integración o e2e que, con un mock o servidor MCP de prueba, llame a `GET /experimental/tool/mcp-ids` (o el path elegido) y compruebe que la respuesta es un array de strings y que contiene al menos los IDs del servidor de prueba.
 - **TUI/autocomplete:** Si existe stack de tests para el TUI (p. ej. con el worker mockeado), simular respuesta del nuevo endpoint con una lista fija de IDs y comprobar que las opciones del autocomplete en modo `/mcp-tools` incluyen esos IDs.
-- **Regresión:** Test que verifique que `GET /tool/ids` sigue devolviendo los IDs del ToolRegistry (built-in + custom/plugin) y que no se rompe ningún consumidor actual de esa ruta.
+- **Regresión:** Test que verifique que `GET /experimental/tool/ids` sigue devolviendo los IDs del ToolRegistry (built-in + custom/plugin) y que no se rompe ningún consumidor actual de esa ruta.
 
 ### 6.3 Casos a tener en cuenta
 
