@@ -10,9 +10,9 @@ Mantener las personalizaciones enterprise (MCP/Azure/UX) sin perder la capacidad
 
 ## Paso previo obligatorio (antes de ejecutar el plan tecnico)
 
-- [ ] Acordar y congelar modelo de ramas de sincronizacion (upstream + integration + enterprise).
-- [ ] Definir perfil inicial de politicas en runtime (`strict`) para evitar ejecucion no intencional.
-- [ ] Aprobar checklist de validacion minima por cada sync (TUI, `/tool`, `/mcp-tools`, MCP call, Azure evidence).
+- [x] Acordar y congelar modelo de ramas de sincronizacion (upstream + integration + enterprise).
+- [x] Definir perfil inicial de politicas en runtime (`strict`) para evitar ejecucion no intencional.
+- [x] Aprobar checklist de validacion minima por cada sync (TUI, `/tool`, `/mcp-tools`, MCP call, Azure evidence).
 
 ## Equipo de 4 agentes (trabajando en conjunto)
 
@@ -22,7 +22,7 @@ Foco: branch model, cadencia de sync, mitigacion de drift.
 
 - [x] Recomendacion de modelo de ramas y cadencia semanal.
 - [x] Riesgos principales y mitigaciones documentadas.
-- [ ] Bajar a runbook operativo con comandos estandar por sync.
+- [x] Bajar a runbook operativo con comandos estandar por sync.
 
 ### Agente 2 - Touchpoints de codigo (bajo conflicto)
 
@@ -30,7 +30,7 @@ Foco: identificar puntos de integracion para policy engine sin tocar en exceso e
 
 - [x] Identificados puntos clave: `permission/next.ts`, `permission/capability.ts`, `session/prompt.ts`, `agent/agent.ts`, `config/config.ts`.
 - [x] Identificados puntos a evitar por alta friccion: `prompt/index.tsx` (edicion invasiva), rutas TUI grandes.
-- [ ] Proponer parche minimo (hook unico) para enforcement universal.
+- [x] Proponer parche minimo (hook unico) para enforcement universal.
 
 ### Agente 3 - Arquitectura Policy Engine
 
@@ -68,26 +68,26 @@ Foco: trazabilidad, checklist, DoD y control de avance.
 
 ## Iteracion 0 - Preparacion de sync compatible
 
-- [ ] Crear/validar remotos y ramas de sincronizacion (`upstream`, `integration/*`, `enterprise/*`).
-- [ ] Documentar protocolo de sync (semanal + seguridad urgente).
-- [ ] Definir top archivos de alto conflicto y estrategia por archivo.
+- [x] Crear/validar remotos y ramas de sincronizacion (`upstream`, `integration/*`, `enterprise/*`).
+- [x] Documentar protocolo de sync (semanal + seguridad urgente).
+- [x] Definir top archivos de alto conflicto y estrategia por archivo.
 
 ## Iteracion 1 - Capa Policy minima (sin romper UX actual)
 
-- [ ] Introducir modulo policy con reglas base:
+- [x] Introducir modulo policy con reglas base:
   - `intent_gating_context_only`
   - `require_explain_before_execute`
   - `require_confirm_for_commit_push`
   - `block_destructive_ops`
-- [ ] Conectar enforcement en puntos de bajo conflicto (`permission/next.ts` + `session/prompt.ts`).
-- [ ] Mantener `/mcp-tools` funcional como baseline actual.
-- [ ] Agregar logs de decision de policy (auditable).
+- [x] Conectar enforcement en puntos de bajo conflicto (`permission/next.ts` + `session/prompt.ts`).
+- [x] Mantener `/mcp-tools` funcional como baseline actual.
+- [x] Agregar logs de decision de policy (auditable).
 
 ## Iteracion 2 - Endurecimiento y desacople para updates
 
 - [ ] Mover validaciones ad-hoc de TUI hacia la capa policy.
 - [ ] Reducir cambios invasivos en `prompt/index.tsx` dejando wrappers/hooks.
-- [ ] Habilitar perfiles (`strict`, `balanced`, `fast`) por config.
+- [x] Habilitar perfiles (`strict`, `balanced`, `fast`) por config.
 - [ ] Agregar pruebas de no regresion para flujo slash tools + MCP.
 
 ## Definicion de hecho (DoD)
@@ -109,4 +109,4 @@ Foco: trazabilidad, checklist, DoD y control de avance.
 
 ## Proxima accion recomendada
 
-Ejecutar Iteracion 0 completa primero (ramas, protocolo y matrix de validacion). Ese gate reduce el costo de todos los cambios siguientes y habilita updates continuos sin reiniciar el proyecto.
+Ejecutar la matriz de validacion completa en runtime real de TUI y registrar evidencia del ciclo en commits/ClickUp.
