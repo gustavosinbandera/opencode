@@ -218,7 +218,7 @@ export namespace PermissionNext {
                 : `Tool call denied by capability policy (${rule.capability.id}, source=${source}).`,
           )
         if (action === "ask") {
-          const id = input.id ?? Identifier.ascending("permission")
+          const id = input.id ?? PermissionID.ascending()
           return new Promise<void>((resolve, reject) => {
             const info: Request = {
               id,
