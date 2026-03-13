@@ -38,7 +38,7 @@ Foco: diseno de reglas genericas (intent gating, explain/confirm/block).
 
 - [x] Definido esquema minimo de reglas (YAML/JSON), decision model y hooks de enforcement.
 - [x] Definido rollout en 2 iteraciones (guardrails -> strictness controlada).
-- [ ] Definir contratos TS finales para implementacion (`PolicyContext`, `ProposedAction`, `PolicyDecision`).
+- [x] Definir contratos TS finales para implementacion (`PolicyContext`, `ProposedAction`, `PolicyDecision`).
 
 ### Agente 4 - Tracking y gobernanza
 
@@ -85,7 +85,7 @@ Foco: trazabilidad, checklist, DoD y control de avance.
 
 ## Iteracion 2 - Endurecimiento y desacople para updates
 
-- [ ] Mover validaciones ad-hoc de TUI hacia la capa policy.
+- [x] Mover validaciones ad-hoc de TUI hacia la capa policy.
 - [ ] Reducir cambios invasivos en `prompt/index.tsx` dejando wrappers/hooks.
 - [x] Habilitar perfiles (`strict`, `balanced`, `fast`) por config.
 - [ ] Agregar pruebas de no regresion para flujo slash tools + MCP.
