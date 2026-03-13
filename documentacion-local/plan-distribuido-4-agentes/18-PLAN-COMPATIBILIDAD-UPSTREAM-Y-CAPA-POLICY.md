@@ -46,7 +46,9 @@ Foco: trazabilidad, checklist, DoD y control de avance.
 
 - [x] Plantilla de tracking con milestones, blockers, DoD y log diario.
 - [x] Checklist inicial consolidado con avances actuales.
-- [ ] Conectar tracking a ClickUp (epics + subtasks por agente).
+- [x] Conectar tracking a ClickUp (epics + subtasks por agente).
+
+Ticket base de ejecucion: ClickUp `86ag5mq85` (status: en curso).
 
 ## Avances hasta el momento (checklist)
 
