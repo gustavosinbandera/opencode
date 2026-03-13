@@ -11,9 +11,10 @@ import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
-import { Config } from "@/config/config"
 import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
+import { Config } from "@/config/config"
+import { Policy } from "@/policy/engine"
 import { Question } from "@/question"
 
 export namespace SessionProcessor {
@@ -162,6 +163,7 @@ export namespace SessionProcessor {
                       )
                     ) {
                       const agent = await Agent.get(input.assistantMessage.agent)
+                      const cfg = await Config.get()
                       await PermissionNext.ask({
                         permission: "doom_loop",
                         patterns: [value.toolName],
@@ -169,6 +171,8 @@ export namespace SessionProcessor {
                         metadata: {
                           tool: value.toolName,
                           input: value.input,
+                          profile: cfg.policy?.profile ?? "strict",
+                          intent: "unknown",
                         },
                         always: [value.toolName],
                         ruleset: agent.permission,

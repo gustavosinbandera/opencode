@@ -13,6 +13,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
+import { loadMcpDebugInfo, loadMcpToolIDs } from "./mcp-catalog"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
@@ -93,7 +94,7 @@ export function Autocomplete(props: {
   const [mcpToolCache, setMcpToolCache] = createSignal<string[]>([])
 
   const resolveMcpToolIDs = async () => {
-    const ids = await sdk.client.mcp.tools({ scope: "local" }).then((x) => x.data ?? []).catch(() => [])
+    const ids = await loadMcpToolIDs(sdk)
     if (ids.length > 0) {
       setMcpToolCache(ids)
       return ids
@@ -399,17 +400,13 @@ export function Autocomplete(props: {
       const ids = await resolveMcpToolIDs()
 
       if (ids.length === 0) {
-        const status = await sdk.client.mcp.status().then((x) => x.data ?? {}).catch(() => ({}))
-        const configuredNames = Object.keys(status)
-        const connectedNames = Object.entries(status)
-          .filter(([, value]) => value.status === "connected")
-          .map(([name]) => name)
+        const debug = await loadMcpDebugInfo(sdk)
 
         return [
           {
             display: "No MCP tools loaded",
             value: "__mcp_empty__",
-            description: `configured=${configuredNames.length} connected=${connectedNames.length}`,
+            description: `configured=${debug.configured.length} connected=${debug.connected.length}`,
             disabled: true,
           },
           {

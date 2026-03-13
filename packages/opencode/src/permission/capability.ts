@@ -126,6 +126,12 @@ export namespace Capability {
     return permission.startsWith("usar-mcp_") || permission.startsWith("magaya_")
   }
 
+  function mcpReadOnly(permission: string): boolean {
+    return ["_get_", "_list_", "_read_", "_view_", "_search_", "_count_", "_report"].some((token) =>
+      permission.includes(token),
+    )
+  }
+
   export function resolve(permission: string): Info {
     const normalized = permission.trim()
     const exact = NATIVE[normalized]
@@ -142,9 +148,11 @@ export namespace Capability {
         id: `cap.${normalized}`,
         permission: normalized,
         source: "mcp",
-        risk: "medium",
-        defaultAction: "ask",
-        description: "Tool exposed by a connected MCP server.",
+        risk: mcpReadOnly(normalized) ? "low" : "medium",
+        defaultAction: mcpReadOnly(normalized) ? "allow" : "ask",
+        description: mcpReadOnly(normalized)
+          ? "Read-only tool exposed by a connected MCP server."
+          : "Tool exposed by a connected MCP server.",
       }
     }
 

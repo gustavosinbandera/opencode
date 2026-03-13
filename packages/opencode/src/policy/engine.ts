@@ -41,14 +41,19 @@ export namespace Policy {
     /\bejecuta\b/i,
     /\bexecute\b/i,
     /\baplica\b/i,
-    /\bcommit\b/i,
-    /\bpush\b/i,
     /\bcambia\b/i,
+    /\bcontinue\b/i,
+    /\bcontinua\b/i,
+    /\bgo ahead\b/i,
+    /\bdo it\b/i,
+    /\bhazlo\b/i,
   ]
   const CONTEXT = [
     /\bexplica\b/i,
     /\banaliza\b/i,
     /\bresumen\b/i,
+    /\bexplain\b/i,
+    /\breview\b/i,
     /\bwhat did we do\b/i,
     /\bque hicimos\b/i,
     /\bte comparti\b/i,
@@ -76,8 +81,8 @@ export namespace Policy {
 
   export function infer(text: string): Intent {
     if (!text.trim()) return "unknown"
-    if (RUN.some((item) => item.test(text))) return "execute"
     if (CONTEXT.some((item) => item.test(text))) return "context_only"
+    if (RUN.some((item) => item.test(text))) return "execute"
     return "unknown"
   }
 

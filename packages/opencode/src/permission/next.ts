@@ -16,6 +16,16 @@ import { Policy } from "@/policy/engine"
 
 export namespace PermissionNext {
   const log = Log.create({ service: "permission" })
+  const PRIORITY: Record<Action, number> = {
+    allow: 0,
+    ask: 1,
+    deny: 2,
+  }
+
+  function tighten(base: Action, override?: Action): Action {
+    if (!override) return base
+    return PRIORITY[override] > PRIORITY[base] ? override : base
+  }
 
   function expand(pattern: string): string {
     if (pattern.startsWith("~/")) return os.homedir() + pattern.slice(1)
@@ -170,8 +180,8 @@ export namespace PermissionNext {
           risk: rule.capability.risk,
           metadata: request.metadata,
         })
-        const action = policy?.action ?? rule.action
-        const source = policy ? "policy" : rule.source
+        const action = tighten(rule.action, policy?.action)
+        const source = policy && action === policy.action ? "policy" : rule.source
         log.info("evaluated", {
           permission: request.permission,
           pattern,

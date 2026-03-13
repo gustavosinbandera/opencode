@@ -49,6 +49,14 @@ describe("Policy.decide", () => {
     expect(out?.action).toBe("ask")
     expect(out?.rule).toBe("require_explain_before_execute")
   })
+
+  test("context wording wins over commit keyword mention", () => {
+    expect(Policy.infer("explica como funciona git commit y git push")).toBe("context_only")
+  })
+
+  test("detects short approval wording as execute", () => {
+    expect(Policy.infer("go ahead and do it")).toBe("execute")
+  })
 })
 
 describe("Policy.infer", () => {

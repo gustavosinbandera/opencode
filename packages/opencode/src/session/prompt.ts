@@ -436,8 +436,16 @@ export namespace SessionPrompt {
             } satisfies MessageV2.ToolPart)
           },
           async ask(req) {
+            const cfg = await Config.get()
+            const profile = cfg.policy?.profile ?? "strict"
+            const intent = Policy.fromMessages(msgs)
             await PermissionNext.ask({
               ...req,
+              metadata: {
+                ...(req.metadata ?? {}),
+                intent,
+                profile,
+              },
               sessionID: sessionID,
               ruleset: PermissionNext.merge(taskAgent.permission, session.permission ?? []),
             })

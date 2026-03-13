@@ -19,6 +19,13 @@ describe("Capability.resolve", () => {
   test("classifies MCP tools by prefix", () => {
     const out = Capability.resolve("usar-mcp_azure_get_work_item")
     expect(out.source).toBe("mcp")
+    expect(out.risk).toBe("low")
+    expect(out.defaultAction).toBe("allow")
+  })
+
+  test("keeps mutating MCP tools guarded", () => {
+    const out = Capability.resolve("usar-mcp_clickup_create_task")
+    expect(out.source).toBe("mcp")
     expect(out.risk).toBe("medium")
     expect(out.defaultAction).toBe("ask")
   })
