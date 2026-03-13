@@ -12,6 +12,7 @@ import { Capability } from "./capability"
 import { Flag } from "@/flag/flag"
 import os from "os"
 import z from "zod"
+import { Policy } from "@/policy/engine"
 
 export namespace PermissionNext {
   const log = Log.create({ service: "permission" })
@@ -105,7 +106,13 @@ export namespace PermissionNext {
         permission: z.string(),
         pattern: z.string(),
         action: Action,
-        source: z.enum(["ruleset", "capability_default", "unknown_default"]),
+        source: z.enum(["ruleset", "capability_default", "unknown_default", "policy"]),
+        policy: z
+          .object({
+            rule: z.string(),
+            reason: z.string(),
+          })
+          .optional(),
         capability: z.object({
           id: z.string(),
           source: z.enum(["native", "mcp", "unknown"]),
@@ -156,19 +163,35 @@ export namespace PermissionNext {
       const { ruleset, ...request } = input
       for (const pattern of request.patterns ?? []) {
         const rule = evaluate(request.permission, pattern, ruleset, s.approved)
+        const policy = Policy.decide({
+          profile: String(request.metadata?.profile ?? "strict"),
+          permission: request.permission,
+          pattern,
+          risk: rule.capability.risk,
+          metadata: request.metadata,
+        })
+        const action = policy?.action ?? rule.action
+        const source = policy ? "policy" : rule.source
         log.info("evaluated", {
           permission: request.permission,
           pattern,
-          action: rule.action,
-          source: rule.source,
+          action,
+          source,
+          policy,
           capability: rule.capability,
         })
         Bus.publish(Event.Evaluated, {
           sessionID: request.sessionID,
           permission: request.permission,
           pattern,
-          action: rule.action,
-          source: rule.source,
+          action,
+          source,
+          policy: policy
+            ? {
+                rule: policy.rule,
+                reason: policy.reason,
+              }
+            : undefined,
           capability: {
             id: rule.capability.id,
             source: rule.capability.source,
@@ -176,14 +199,16 @@ export namespace PermissionNext {
             defaultAction: rule.capability.defaultAction,
           },
         })
-        if (rule.action === "deny")
+        if (action === "deny")
           throw new DeniedError(
             ruleset.filter((r) => Wildcard.match(request.permission, r.permission)),
-            rule.source === "ruleset"
+            source === "ruleset"
               ? undefined
-              : `Tool call denied by capability policy (${rule.capability.id}, source=${rule.source}).`,
+              : policy
+                ? `${policy.reason} (rule=${policy.rule}, capability=${rule.capability.id}).`
+                : `Tool call denied by capability policy (${rule.capability.id}, source=${source}).`,
           )
-        if (rule.action === "ask") {
+        if (action === "ask") {
           const id = input.id ?? Identifier.ascending("permission")
           return new Promise<void>((resolve, reject) => {
             const info: Request = {
@@ -198,7 +223,7 @@ export namespace PermissionNext {
             Bus.publish(Event.Asked, info)
           })
         }
-        if (rule.action === "allow") continue
+        if (action === "allow") continue
       }
     },
   )
@@ -296,8 +321,8 @@ export namespace PermissionNext {
     },
   )
 
-  export type Evaluation = Rule & {
-    source: "ruleset" | "capability_default" | "unknown_default"
+export type Evaluation = Rule & {
+    source: "ruleset" | "capability_default" | "unknown_default" | "policy"
     capability: Capability.Info
   }
 
