@@ -1438,7 +1438,9 @@ function VuMeter() {
 
   return (
     <text>
-      <span style={{ fg: dot() }}>●</span>
+      <span style={{ fg: voice.recording() ? theme.error : theme.textMuted }}>●</span>
+      {" "}
+      <span style={{ fg: voice.recording() ? theme.success : theme.textMuted }}>mic</span>
       {" "}
       {Array.from({ length: DOT_COUNT }, (_, i) => {
         const on = () => i < filled()
