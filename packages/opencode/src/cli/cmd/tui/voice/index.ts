@@ -48,7 +48,7 @@ class OpenAIProvider implements STTProvider {
               input_audio_format: "pcm16",
               input_audio_transcription: {
                 model: opts.model,
-                language: opts.language,
+                ...(opts.language && opts.language !== "auto" ? { language: opts.language } : {}),
               },
               turn_detection: {
                 type: "server_vad",
@@ -423,6 +423,8 @@ function audioLevel(buf: Buffer): number {
 const VOICE_GATE_THRESHOLD = 0.2
 // Keep sending audio for this many ms after last speech detected (avoids cutting between words).
 const VOICE_GATE_HOLD_MS = 600
+// Force a buffer commit every N ms while speaking, so text arrives in chunks even without pauses.
+const COMMIT_INTERVAL_MS = 3000
 
 export class VoiceRecorder {
   private provider: STTProvider
@@ -432,6 +434,7 @@ export class VoiceRecorder {
   private lastLevelTime = 0
   private peakLevel = 0
   private lastSpeechTime = 0
+  private lastCommitTime = 0
   private wasSending = false
 
   constructor(
@@ -517,9 +520,15 @@ export class VoiceRecorder {
       const sending = now - this.lastSpeechTime <= VOICE_GATE_HOLD_MS
       if (sending) {
         this.provider.sendAudio(chunk)
+        // Periodic commit so text arrives in chunks even when speaking non-stop
+        if (now - this.lastCommitTime >= COMMIT_INTERVAL_MS) {
+          this.lastCommitTime = now
+          this.provider.flush()
+        }
       } else if (this.wasSending) {
         // Silence detected after speech — commit buffer so transcription is released
         this.provider.flush()
+        this.lastCommitTime = 0
       }
       this.wasSending = sending
 
