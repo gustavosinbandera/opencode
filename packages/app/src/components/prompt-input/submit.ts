@@ -469,7 +469,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
         return
       }
 
-      const available = await client.tool.ids().then((x) => x.data ?? []).catch(() => [])
+      const available: string[] = await client.tool.ids().then((x) => x.data ?? []).catch(() => [])
       if (!available.includes(toolName)) {
         const typed = toolName.toLowerCase()
         const suggestions = available
