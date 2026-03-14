@@ -390,17 +390,38 @@ async function buildFfmpegArgs(): Promise<string[]> {
 
 // ─── VoiceRecorder ────────────────────────────────────────────────────────────
 
+// RMS energy of a PCM16-LE buffer, normalized to 0–1.
+// Low noise floor (~50-200 RMS) maps to ~0.05-0.12 (yellow/warning zone).
+// Normal speech (~500-3000 RMS) maps to ~0.2-0.6 (green zone).
+// Loud speech/clipping (~5000+) maps to ~0.7+ (red zone).
+function audioLevel(buf: Buffer): number {
+  const samples = buf.length >> 1
+  if (samples === 0) return 0
+  let sum = 0
+  for (let i = 0; i < buf.length; i += 2) {
+    const s = buf.readInt16LE(i)
+    sum += s * s
+  }
+  const rms = Math.sqrt(sum / samples)
+  return Math.min(1, Math.log1p(rms) / Math.log1p(10000))
+}
+
 export class VoiceRecorder {
   private provider: STTProvider
   private proc: ChildProcess | null = null
   private onTranscript: (text: string) => void
+  private onLevel: ((level: number) => void) | null = null
+  private lastLevelTime = 0
+  private peakLevel = 0
 
   constructor(
     private config: VoiceConfig,
     onTranscript: (text: string) => void,
+    onLevel?: (level: number) => void,
   ) {
     this.provider = createProvider(config.provider ?? "openai")
     this.onTranscript = onTranscript
+    this.onLevel = onLevel ?? null
   }
 
   async start(onError?: (err: string) => void): Promise<void> {
@@ -470,6 +491,14 @@ export class VoiceRecorder {
 
     this.proc.stdout?.on("data", (chunk: Buffer) => {
       this.provider.sendAudio(chunk)
+      const lvl = audioLevel(chunk)
+      if (lvl > this.peakLevel) this.peakLevel = lvl
+      const now = Date.now()
+      if (now - this.lastLevelTime >= 50) {
+        this.lastLevelTime = now
+        this.onLevel?.(this.peakLevel)
+        this.peakLevel = 0
+      }
     })
   }
 

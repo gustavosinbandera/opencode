@@ -35,6 +35,7 @@ import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
+import { tryUseVoice } from "../../context/voice"
 
 export type PromptProps = {
   sessionID?: string
@@ -1282,6 +1283,7 @@ export function Prompt(props: PromptProps) {
                       <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
                     </text>
                   </Show>
+                  <VuMeter />
                 </box>
               </Show>
             </box>
@@ -1421,5 +1423,33 @@ export function Prompt(props: PromptProps) {
         </box>
       </box>
     </>
+  )
+}
+
+const DOT_COUNT = 10
+
+function VuMeter() {
+  const { theme } = useTheme()
+  const voice = tryUseVoice()
+
+  const filled = createMemo(() => Math.round(voice.level() * DOT_COUNT))
+
+  const dot = createMemo(() => (voice.recording() ? theme.error : theme.textMuted))
+
+  return (
+    <text>
+      <span style={{ fg: dot() }}>●</span>
+      {" "}
+      {Array.from({ length: DOT_COUNT }, (_, i) => {
+        const on = () => i < filled()
+        const c = () => {
+          if (!voice.recording() || !on()) return theme.textMuted
+          if (i >= 8) return theme.error
+          if (i >= 5) return theme.warning
+          return theme.success
+        }
+        return <span style={{ fg: c() }}>{on() && voice.recording() ? "●" : "·"}</span>
+      })}
+    </text>
   )
 }
