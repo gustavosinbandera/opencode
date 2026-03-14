@@ -15,6 +15,7 @@ interface STTProvider {
   connect(apiKey: string, opts: { language: string; model: string }): Promise<void>
   sendAudio(chunk: Buffer): void
   onDelta(cb: (text: string) => void): void
+  flush(): void
   disconnect(): void
 }
 
@@ -68,7 +69,8 @@ class OpenAIProvider implements STTProvider {
         try {
           const msg = JSON.parse(evt.data as string)
           if (msg.type === "conversation.item.input_audio_transcription.delta" && msg.delta) {
-            this.deltaCallback?.(msg.delta)
+            const text = (msg.delta as string).replace(/\.\s*$/g, ", ")
+            this.deltaCallback?.(text)
           }
         } catch {
           // ignore parse errors
@@ -89,6 +91,11 @@ class OpenAIProvider implements STTProvider {
 
   onDelta(cb: (text: string) => void): void {
     this.deltaCallback = cb
+  }
+
+  flush(): void {
+    if (this.ws?.readyState !== WebSocket.OPEN) return
+    this.ws.send(JSON.stringify({ type: "input_audio_buffer.commit" }))
   }
 
   disconnect(): void {
@@ -144,6 +151,8 @@ class DeepgramProvider implements STTProvider {
   onDelta(cb: (text: string) => void): void {
     this.deltaCallback = cb
   }
+
+  flush(): void {}
 
   disconnect(): void {
     if (this.ws) {
@@ -201,6 +210,8 @@ class AssemblyAIProvider implements STTProvider {
     this.deltaCallback = cb
   }
 
+  flush(): void {}
+
   disconnect(): void {
     if (this.ws) {
       this.ws.close()
@@ -225,7 +236,7 @@ class GroqProvider implements STTProvider {
     this.opts = { language: opts.language, model: opts.model || "whisper-large-v3-turbo" }
     this.stopped = false
     // Flush every 2 seconds
-    this.interval = setInterval(() => this.flush(), 2000)
+    this.interval = setInterval(() => this.flushBuffer(), 2000)
   }
 
   sendAudio(chunk: Buffer): void {
@@ -236,7 +247,9 @@ class GroqProvider implements STTProvider {
     this.deltaCallback = cb
   }
 
-  private async flush(): Promise<void> {
+  flush(): void {}
+
+  private async flushBuffer(): Promise<void> {
     if (this.buffer.length === 0 || this.stopped) return
     const combined = Buffer.concat(this.buffer)
     this.buffer = []
@@ -391,9 +404,8 @@ async function buildFfmpegArgs(): Promise<string[]> {
 // ─── VoiceRecorder ────────────────────────────────────────────────────────────
 
 // RMS energy of a PCM16-LE buffer, normalized to 0–1.
-// Low noise floor (~50-200 RMS) maps to ~0.05-0.12 (yellow/warning zone).
-// Normal speech (~500-3000 RMS) maps to ~0.2-0.6 (green zone).
-// Loud speech/clipping (~5000+) maps to ~0.7+ (red zone).
+// Uses log scale with high ceiling (30000) so normal speech at moderate mic
+// levels shows ~3 dots. You need loud/close input to reach 7+ dots.
 function audioLevel(buf: Buffer): number {
   const samples = buf.length >> 1
   if (samples === 0) return 0
@@ -403,12 +415,12 @@ function audioLevel(buf: Buffer): number {
     sum += s * s
   }
   const rms = Math.sqrt(sum / samples)
-  return Math.min(1, Math.log1p(rms) / Math.log1p(10000))
+  return Math.min(1, Math.log1p(rms) / Math.log1p(30000))
 }
 
 // Minimum audio level to consider as speech (below = silence, not sent to API).
-// Threshold 0.4 = 4 dots on the VU meter; below that is visual only.
-const VOICE_GATE_THRESHOLD = 0.4
+// Threshold 0.2 = 2 dots on the VU meter; below that is visual only.
+const VOICE_GATE_THRESHOLD = 0.2
 // Keep sending audio for this many ms after last speech detected (avoids cutting between words).
 const VOICE_GATE_HOLD_MS = 600
 
@@ -420,6 +432,7 @@ export class VoiceRecorder {
   private lastLevelTime = 0
   private peakLevel = 0
   private lastSpeechTime = 0
+  private wasSending = false
 
   constructor(
     private config: VoiceConfig,
@@ -501,9 +514,14 @@ export class VoiceRecorder {
       if (lvl >= VOICE_GATE_THRESHOLD) {
         this.lastSpeechTime = now
       }
-      if (now - this.lastSpeechTime <= VOICE_GATE_HOLD_MS) {
+      const sending = now - this.lastSpeechTime <= VOICE_GATE_HOLD_MS
+      if (sending) {
         this.provider.sendAudio(chunk)
+      } else if (this.wasSending) {
+        // Silence detected after speech — commit buffer so transcription is released
+        this.provider.flush()
       }
+      this.wasSending = sending
 
       // Throttled level updates for VU meter
       if (lvl > this.peakLevel) this.peakLevel = lvl
