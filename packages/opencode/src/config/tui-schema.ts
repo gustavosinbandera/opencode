@@ -10,6 +10,16 @@ const KeybindOverride = z
   )
   .strict()
 
+export const VoiceOptions = z
+  .object({
+    provider: z.enum(["openai", "deepgram", "assemblyai", "groq"]).optional().describe("STT provider"),
+    apiKey: z.string().optional().describe("API key for the STT provider"),
+    model: z.string().optional().describe("Model to use for transcription"),
+    language: z.string().optional().default("en").describe("Language code for transcription (e.g. 'en', 'es')"),
+  })
+  .optional()
+  .describe("Voice input configuration")
+
 export const TuiOptions = z.object({
   scroll_speed: z.number().min(0.001).optional().describe("TUI scroll speed"),
   scroll_acceleration: z
@@ -29,6 +39,7 @@ export const TuiInfo = z
     $schema: z.string().optional(),
     theme: z.string().optional(),
     keybinds: KeybindOverride.optional(),
+    voice: VoiceOptions,
   })
   .extend(TuiOptions.shape)
   .strict()

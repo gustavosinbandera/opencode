@@ -71,6 +71,7 @@ import { useKV } from "../../context/kv.tsx"
 import { Editor } from "../../util/editor"
 import stripAnsi from "strip-ansi"
 import { Footer } from "./footer.tsx"
+import { VoiceProvider } from "../../context/voice"
 import { usePromptRef } from "../../context/prompt"
 import { useExit } from "../../context/exit"
 import { Filesystem } from "@/util/filesystem"
@@ -112,6 +113,7 @@ function use() {
   if (!ctx) throw new Error("useContext must be used within a Session component")
   return ctx
 }
+
 
 export function Session() {
   const route = useRouteData("session")
@@ -1029,6 +1031,7 @@ export function Session() {
   createEffect(on(() => route.sessionID, toBottom))
 
   return (
+    <VoiceProvider>
     <context.Provider
       value={{
         get width() {
@@ -1045,7 +1048,8 @@ export function Session() {
         tui: tuiConfig,
       }}
     >
-      <box flexDirection="row">
+      <>
+      <box flexDirection="row" flexGrow={1}>
         <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show when={session()}>
             <Show when={showHeader() && (!sidebarVisible() || !wide())}>
@@ -1213,7 +1217,10 @@ export function Session() {
           </Switch>
         </Show>
       </box>
+      <Footer />
+      </>
     </context.Provider>
+    </VoiceProvider>
   )
 }
 
