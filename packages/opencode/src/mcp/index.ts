@@ -105,6 +105,7 @@ export namespace MCP {
     ])
     .meta({
       ref: "MCPStatus",
+      "~standard": { vendor: "zod" },
     })
   export type Status = z.infer<typeof Status>
 

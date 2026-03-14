@@ -14,10 +14,13 @@ import { Capability } from "./capability"
 import { Flag } from "@/flag/flag"
 import os from "os"
 import z from "zod"
-import { Policy } from "@/policy/engine"
 
 export namespace PermissionNext {
   const log = Log.create({ service: "permission" })
+  // Force debug logging
+  if (typeof process !== "undefined" && !process.env.LOG_LEVEL) {
+    process.env.LOG_LEVEL = "DEBUG"
+  }
   const PRIORITY: Record<Action, number> = {
     allow: 0,
     ask: 1,
@@ -155,6 +158,19 @@ export namespace PermissionNext {
       db.select().from(PermissionTable).where(eq(PermissionTable.project_id, projectID)).get(),
     )
     const stored = row?.data ?? ([] as Ruleset)
+    log.debug("loading permissions from DB", {
+      projectID,
+      hasRow: !!row,
+      storedCount: stored.length,
+      dbPath: Database.Path,
+    })
+
+    log.info("loading permissions from DB", {
+      projectID,
+      hasRow: !!row,
+      storedCount: stored.length,
+      dbPath: Database.Path,
+    })
 
     return {
       pending: new Map<PermissionID, PendingEntry>(),
@@ -170,23 +186,28 @@ export namespace PermissionNext {
     async (input) => {
       const s = await state()
       const { ruleset, ...request } = input
+      log.debug("permission ask", {
+        permission: request.permission,
+        patterns: request.patterns,
+        approvedCount: s.approved.length,
+      })
       for (const pattern of request.patterns ?? []) {
         const rule = evaluate(request.permission, pattern, ruleset, s.approved)
-        const policy = Policy.decide({
-          profile: String(request.metadata?.profile ?? "strict"),
+        const action = rule.action
+        const source = rule.source
+        log.debug("permission evaluation", {
           permission: request.permission,
           pattern,
-          risk: rule.capability.risk,
-          metadata: request.metadata,
+          action,
+          source,
+          capability: rule.capability.id,
+          defaultAction: rule.capability.defaultAction,
         })
-        const action = tighten(rule.action, policy?.action)
-        const source = policy && action === policy.action ? "policy" : rule.source
         log.info("evaluated", {
           permission: request.permission,
           pattern,
           action,
           source,
-          policy,
           capability: rule.capability,
         })
         Bus.publish(Event.Evaluated, {
@@ -195,12 +216,6 @@ export namespace PermissionNext {
           pattern,
           action,
           source,
-          policy: policy
-            ? {
-                rule: policy.rule,
-                reason: policy.reason,
-              }
-            : undefined,
           capability: {
             id: rule.capability.id,
             source: rule.capability.source,
@@ -213,9 +228,7 @@ export namespace PermissionNext {
             ruleset.filter((r) => Wildcard.match(request.permission, r.permission)),
             source === "ruleset"
               ? undefined
-              : policy
-                ? `${policy.reason} (rule=${policy.rule}, capability=${rule.capability.id}).`
-                : `Tool call denied by capability policy (${rule.capability.id}, source=${source}).`,
+              : `Tool call denied by capability policy (${rule.capability.id}, source=${source}).`,
           )
         if (action === "ask") {
           const id = input.id ?? PermissionID.ascending()
@@ -330,7 +343,7 @@ export namespace PermissionNext {
     },
   )
 
-export type Evaluation = Rule & {
+  export type Evaluation = Rule & {
     source: "ruleset" | "capability_default" | "unknown_default" | "policy"
     capability: Capability.Info
   }
@@ -342,6 +355,13 @@ export type Evaluation = Rule & {
       (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
     )
     if (match) {
+      log.info("evaluate matched rule", {
+        permission,
+        pattern,
+        rule: match,
+        matchedPermission: Wildcard.match(permission, match.permission),
+        matchedPattern: Wildcard.match(pattern, match.pattern),
+      })
       return {
         ...match,
         source: "ruleset",
@@ -350,6 +370,12 @@ export type Evaluation = Rule & {
     }
 
     const capability = Capability.resolve(permission)
+    log.info("evaluate no match, using capability", {
+      permission,
+      pattern,
+      capability: capability.id,
+      defaultAction: capability.defaultAction,
+    })
     if (capability.source === "unknown" && Flag.OPENCODE_EXPERIMENTAL_CAPABILITY_DENY_UNKNOWN) {
       return {
         permission,
