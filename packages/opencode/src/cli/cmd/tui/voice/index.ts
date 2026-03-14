@@ -406,6 +406,12 @@ function audioLevel(buf: Buffer): number {
   return Math.min(1, Math.log1p(rms) / Math.log1p(10000))
 }
 
+// Minimum audio level to consider as speech (below = silence, not sent to API).
+// Threshold 0.4 = 4 dots on the VU meter; below that is visual only.
+const VOICE_GATE_THRESHOLD = 0.4
+// Keep sending audio for this many ms after last speech detected (avoids cutting between words).
+const VOICE_GATE_HOLD_MS = 600
+
 export class VoiceRecorder {
   private provider: STTProvider
   private proc: ChildProcess | null = null
@@ -413,6 +419,7 @@ export class VoiceRecorder {
   private onLevel: ((level: number) => void) | null = null
   private lastLevelTime = 0
   private peakLevel = 0
+  private lastSpeechTime = 0
 
   constructor(
     private config: VoiceConfig,
@@ -449,7 +456,7 @@ export class VoiceRecorder {
       return
     }
 
-    this.provider.onDelta((text) => this.onDelta(text))
+    this.provider.onDelta((text) => this.onTranscript(text))
 
     // Launch ffmpeg
     let args: string[]
@@ -481,19 +488,25 @@ export class VoiceRecorder {
       }
     })
 
-    let ffmpegStderr = ""
     this.proc.stderr?.on("data", (d: Buffer) => {
-      ffmpegStderr += d.toString()
-      // Log only errors / device lines
       const line = d.toString().trim()
       if (line) log.info("ffmpeg stderr", { line: line.slice(0, 200) })
     })
 
     this.proc.stdout?.on("data", (chunk: Buffer) => {
-      this.provider.sendAudio(chunk)
       const lvl = audioLevel(chunk)
-      if (lvl > this.peakLevel) this.peakLevel = lvl
       const now = Date.now()
+
+      // Voice gate: only send audio when speech is detected or within hold period
+      if (lvl >= VOICE_GATE_THRESHOLD) {
+        this.lastSpeechTime = now
+      }
+      if (now - this.lastSpeechTime <= VOICE_GATE_HOLD_MS) {
+        this.provider.sendAudio(chunk)
+      }
+
+      // Throttled level updates for VU meter
+      if (lvl > this.peakLevel) this.peakLevel = lvl
       if (now - this.lastLevelTime >= 50) {
         this.lastLevelTime = now
         this.onLevel?.(this.peakLevel)
@@ -508,10 +521,6 @@ export class VoiceRecorder {
       this.proc.kill("SIGTERM")
       this.proc = null
     }
-  }
-
-  private onDelta(text: string): void {
-    this.onTranscript(text)
   }
 
   private async getApiKey(providerName: string): Promise<string | undefined> {

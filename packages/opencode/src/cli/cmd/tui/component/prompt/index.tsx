@@ -1434,8 +1434,6 @@ function VuMeter() {
 
   const filled = createMemo(() => Math.round(voice.level() * DOT_COUNT))
 
-  const dot = createMemo(() => (voice.recording() ? theme.error : theme.textMuted))
-
   return (
     <text>
       <span style={{ fg: voice.recording() ? theme.error : theme.textMuted }}>●</span>
