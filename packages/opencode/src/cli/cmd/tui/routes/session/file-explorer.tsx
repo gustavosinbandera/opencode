@@ -2,7 +2,7 @@ import { createSignal, createMemo, createResource, For, Show, onMount } from "so
 import { useTheme } from "../../context/theme"
 import { useDirectory } from "../../context/directory"
 import { Installation } from "@/installation"
-import { execSync } from "child_process"
+import { readdirSync, statSync } from "fs"
 import path from "path"
 
 interface FileEntry {
@@ -12,88 +12,64 @@ interface FileEntry {
   path: string
 }
 
-function scanDirectory(dir: string, filter?: string, maxDepth = 3): FileEntry[] {
-  try {
-    // Use ripgrep --files for speed, with common ignores
-    const ignores = [
-      "node_modules",
-      ".git",
-      "dist",
-      "build",
-      ".cache",
-      "__pycache__",
-      ".next",
-      "target",
-      "coverage",
-      ".turbo",
-    ]
-    const ignoreArgs = ignores.map((i) => `--glob "!${i}"`).join(" ")
-    const cmd = `rg --files ${ignoreArgs} --sort path "${dir}" 2>/dev/null | head -500`
-    const raw = execSync(cmd, { encoding: "utf-8", timeout: 5000 }).trim()
-    if (!raw) return []
+const IGNORE = new Set([
+  "node_modules", ".git", "dist", "build", ".cache", "__pycache__",
+  ".next", "target", "coverage", ".turbo", ".venv", "venv",
+  ".idea", ".vscode", "obj", "bin", ".DS_Store",
+])
 
-    const files = raw.split("\n").map((f) => f.replace(/\\/g, "/"))
-    const dirNorm = dir.replace(/\\/g, "/").replace(/\/$/, "")
+function scanDirectory(dir: string, filter?: string, maxDepth = 2): FileEntry[] {
+  const entries: FileEntry[] = []
+  const filterLower = filter?.toLowerCase()
 
-    // Build tree entries
-    const seen = new Set<string>()
-    const entries: FileEntry[] = []
+  function walk(currentDir: string, depth: number, relPath: string) {
+    if (depth > maxDepth) return
+    let items: string[]
+    try {
+      items = readdirSync(currentDir)
+    } catch {
+      return
+    }
 
-    for (const file of files) {
-      const rel = file.startsWith(dirNorm) ? file.slice(dirNorm.length + 1) : file
-      if (!rel) continue
-
-      const parts = rel.split("/")
-      if (parts.length > maxDepth) continue
-
-      // Apply filter
-      if (filter) {
-        const lower = filter.toLowerCase()
-        if (!rel.toLowerCase().includes(lower)) continue
-      }
-
-      // Add parent directories
-      for (let i = 0; i < parts.length - 1; i++) {
-        const dirPath = parts.slice(0, i + 1).join("/")
-        if (!seen.has(dirPath)) {
-          seen.add(dirPath)
-          entries.push({ name: parts[i], type: "dir", depth: i, path: dirPath })
-        }
-      }
-
-      // Add file
-      const filePath = parts.join("/")
-      if (!seen.has(filePath)) {
-        seen.add(filePath)
-        entries.push({ name: parts[parts.length - 1], type: "file", depth: parts.length - 1, path: filePath })
+    // Separate dirs and files, sort each alphabetically
+    const dirs: string[] = []
+    const files: string[] = []
+    for (const item of items) {
+      if (item.startsWith(".") && item !== ".env") continue
+      if (IGNORE.has(item)) continue
+      try {
+        const fullPath = path.join(currentDir, item)
+        const stat = statSync(fullPath)
+        if (stat.isDirectory()) dirs.push(item)
+        else files.push(item)
+      } catch {
+        continue
       }
     }
 
-    // Sort: directories first at each level, then files, alphabetically
-    entries.sort((a, b) => {
-      if (a.depth !== b.depth) {
-        // Compare by common path prefix
-        const aParts = a.path.split("/")
-        const bParts = b.path.split("/")
-        const minLen = Math.min(aParts.length, bParts.length)
-        for (let i = 0; i < minLen; i++) {
-          if (aParts[i] !== bParts[i]) {
-            // At this level, dirs come first
-            const aIsDir = i < aParts.length - 1 || a.type === "dir"
-            const bIsDir = i < bParts.length - 1 || b.type === "dir"
-            if (aIsDir !== bIsDir) return aIsDir ? -1 : 1
-            return aParts[i].localeCompare(bParts[i])
-          }
-        }
-      }
-      if (a.type !== b.type) return a.type === "dir" ? -1 : 1
-      return a.path.localeCompare(b.path)
-    })
+    dirs.sort((a, b) => a.localeCompare(b))
+    files.sort((a, b) => a.localeCompare(b))
 
-    return entries
-  } catch {
-    return []
+    for (const name of dirs) {
+      const rel = relPath ? `${relPath}/${name}` : name
+      if (!filterLower || rel.toLowerCase().includes(filterLower) || name.toLowerCase().includes(filterLower)) {
+        entries.push({ name, type: "dir", depth, path: rel })
+      }
+      walk(path.join(currentDir, name), depth + 1, rel)
+    }
+
+    for (const name of files) {
+      const rel = relPath ? `${relPath}/${name}` : name
+      if (filterLower && !rel.toLowerCase().includes(filterLower) && !name.toLowerCase().includes(filterLower)) continue
+      entries.push({ name, type: "file", depth, path: rel })
+    }
   }
+
+  try {
+    walk(dir, 0, "")
+  } catch {}
+
+  return entries
 }
 
 export function FileExplorer() {
