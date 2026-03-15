@@ -2,7 +2,8 @@ import { createSignal, createMemo, createResource, For, Show, onMount } from "so
 import { useTheme } from "../../context/theme"
 import { useSync } from "@tui/context/sync"
 import { useDialog } from "../../ui/dialog"
-import { Dialog } from "../../ui/dialog"
+import { useTerminalDimensions } from "@opentui/solid"
+import { RGBA } from "@opentui/core"
 import { Installation } from "@/installation"
 import { readdirSync, statSync, existsSync, readFileSync } from "fs"
 import pathModule from "path"
@@ -119,16 +120,40 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
     }
   })
 
+  const dimensions = useTerminalDimensions()
+  const viewerWidth = createMemo(() => Math.min(dimensions().width - 6, 120))
+  const viewerHeight = createMemo(() => dimensions().height - 6)
+
   return (
-    <Dialog onClose={props.onClose} size="large">
-      <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
-        <box flexDirection="row" justifyContent="space-between">
+    <box
+      onMouseUp={props.onClose}
+      width={dimensions().width}
+      height={dimensions().height}
+      alignItems="center"
+      justifyContent="center"
+      position="absolute"
+      left={0}
+      top={0}
+      backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
+    >
+      <box
+        onMouseUp={(e) => e.stopPropagation()}
+        width={viewerWidth()}
+        height={viewerHeight()}
+        backgroundColor={theme.backgroundPanel}
+        paddingTop={1}
+        paddingLeft={2}
+        paddingRight={2}
+        paddingBottom={1}
+        gap={1}
+      >
+        <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
           <text fg={theme.text}><b>📄 {fileName}</b></text>
           <text fg={theme.textMuted}>esc to close</text>
         </box>
-        <text fg={theme.textMuted} wrapMode="none">{props.filePath}</text>
+        <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>{props.filePath}</text>
         <scrollbox
-          maxHeight={30}
+          flexGrow={1}
           verticalScrollbarOptions={{
             trackOptions: {
               backgroundColor: theme.background,
@@ -144,7 +169,7 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
           />
         </scrollbox>
       </box>
-    </Dialog>
+    </box>
   )
 }
 
