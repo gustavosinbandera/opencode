@@ -197,13 +197,30 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
           },
         }}
       >
-        <code
-          filetype={lang()}
-          content={content()}
-          drawUnstyledText={false}
-          syntaxStyle={syntax()}
-          wrapMode="none"
-        />
+        <Show when={mode() === "file"}>
+          <code
+            filetype={lang()}
+            content={content()}
+            drawUnstyledText={false}
+            syntaxStyle={syntax()}
+            wrapMode="none"
+          />
+        </Show>
+        <Show when={mode() !== "file"}>
+          <box flexShrink={0}>
+            <For each={content().split("\n")}>
+              {(line) => {
+                const isAdd = line.startsWith("+") && !line.startsWith("+++")
+                const isDel = line.startsWith("-") && !line.startsWith("---")
+                const isHunk = line.startsWith("@@")
+                const isHeader = line.startsWith("diff ") || line.startsWith("index ") || line.startsWith("---") || line.startsWith("+++")
+                const fg = isAdd ? theme.diffAdded : isDel ? theme.diffRemoved : isHunk ? theme.diffHunkHeader : isHeader ? theme.textMuted : theme.diffContext
+                const bg = isAdd ? theme.diffAddedBg : isDel ? theme.diffRemovedBg : undefined
+                return <box backgroundColor={bg}><text fg={fg} wrapMode="none">{line}</text></box>
+              }}
+            </For>
+          </box>
+        </Show>
       </scrollbox>
     </box>
   )
