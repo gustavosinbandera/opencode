@@ -308,8 +308,12 @@ export function FileExplorer() {
               <text
                 fg={entry.type === "dir" ? theme.accent : theme.textMuted}
                 wrapMode="none"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                }}
                 onMouseUp={(e) => {
                   e.stopPropagation()
+                  e.preventDefault()
                   if (entry.type === "file") {
                     const fullPath = pathModule.join(targetDir().dir, entry.path)
                     dialog.setSize("large")
