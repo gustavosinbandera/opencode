@@ -52,6 +52,12 @@ export namespace SystemPrompt {
             : ""
         }`,
         `</directories>`,
+        `<formatting-tools>`,
+        `You have built-in formatting tools. ALWAYS use them instead of manual text formatting:`,
+        `- "diagram" tool: Use for ANY flow diagram, architecture, pipeline, or system visualization. Never draw diagrams manually.`,
+        `- "table" tool: Use for ANY tabular data, comparisons, feature matrices, or structured lists. Never draw tables manually — the tool guarantees perfect column alignment.`,
+        `- "github" tool: Use for ALL GitHub operations (repos, issues, PRs, tree, releases, actions, code search). Never use bash with curl or gh commands for GitHub.`,
+        `</formatting-tools>`,
       ].join("\n"),
     ]
   }
