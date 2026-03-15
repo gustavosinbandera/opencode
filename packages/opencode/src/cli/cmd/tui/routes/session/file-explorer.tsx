@@ -78,6 +78,17 @@ const BINARY_EXTENSIONS = new Set([
 ])
 
 
+type ViewMode = "file" | "diff0" | "diff1" | "diff2" | "diff3" | "diff4"
+
+const VIEWER_TABS: { id: ViewMode; label: string }[] = [
+  { id: "file", label: "📄 File" },
+  { id: "diff0", label: "± vs Remote" },
+  { id: "diff1", label: "~1" },
+  { id: "diff2", label: "~2" },
+  { id: "diff3", label: "~3" },
+  { id: "diff4", label: "~4" },
+]
+
 function getGitDiff(filePath: string, commits = 1): string {
   try {
     const { execSync } = require("child_process") as typeof import("child_process")
@@ -99,8 +110,6 @@ function getGitDiff(filePath: string, commits = 1): string {
     return "[Not a git repository or git not available]"
   }
 }
-
-type ViewMode = "file" | "diff0" | "diff1" | "diff2" | "diff3" | "diff4"
 
 function FileViewer(props: { filePath: string; onClose: () => void }) {
   const { theme, syntax } = useTheme()
@@ -151,15 +160,6 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
   const dimensions = useTerminalDimensions()
   const scrollHeight = createMemo(() => Math.max(10, Math.floor(dimensions().height * 3 / 4) - 8))
 
-  const tabs: { id: ViewMode; label: string }[] = [
-    { id: "file", label: "📄 File" },
-    { id: "diff0", label: "± vs Remote" },
-    { id: "diff1", label: "~1" },
-    { id: "diff2", label: "~2" },
-    { id: "diff3", label: "~3" },
-    { id: "diff4", label: "~4" },
-  ]
-
   return (
     <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
       <box flexDirection="row" justifyContent="space-between">
@@ -170,7 +170,7 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
       </box>
       <text fg={theme.textMuted}>{props.filePath}</text>
       <box flexDirection="row" gap={1}>
-        <For each={tabs}>
+        <For each={VIEWER_TABS}>
           {(tab) => (
             <box onMouseDown={(e) => { e.stopPropagation(); setMode(tab.id) }}>
               <text>
@@ -220,28 +220,8 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
                 const isHunk = line.startsWith("@@")
                 const isHeader = line.startsWith("diff ") || line.startsWith("index ") || line.startsWith("---") || line.startsWith("+++")
                 const bg = isAdd ? RGBA.fromHex("#1a2e22") : isDel ? RGBA.fromHex("#2d1315") : isHunk ? RGBA.fromHex("#1c2333") : undefined
-                const prefix = isAdd ? "+" : isDel ? "-" : isHunk ? "@@" : ""
-                const codeContent = (isAdd || isDel) ? line.slice(1) : line
-                if (isHeader) {
-                  return <box backgroundColor={bg}><text fg={theme.textMuted} wrapMode="none">{line}</text></box>
-                }
-                if (isHunk) {
-                  return <box backgroundColor={bg}><text fg={RGBA.fromHex("#6e7681")} wrapMode="none">{line}</text></box>
-                }
-                return (
-                  <box backgroundColor={bg} flexDirection="row">
-                    <text fg={isAdd ? RGBA.fromHex("#3fb950") : isDel ? RGBA.fromHex("#f85149") : theme.diffContext} wrapMode="none" flexShrink={0}>
-                      {isAdd ? "+" : isDel ? "-" : " "}
-                    </text>
-                    <code
-                      filetype={lang() === "diff" ? (LANGUAGE_EXTENSIONS[ext] || ext.slice(1) || "text") : lang()}
-                      content={codeContent}
-                      drawUnstyledText={false}
-                      syntaxStyle={syntax()}
-                      wrapMode="none"
-                    />
-                  </box>
-                )
+                const fg = isAdd ? RGBA.fromHex("#3fb950") : isDel ? RGBA.fromHex("#f85149") : isHunk ? RGBA.fromHex("#6e7681") : isHeader ? theme.textMuted : theme.text
+                return <box backgroundColor={bg}><text fg={fg} wrapMode="none">{line}</text></box>
               }}
             </For>
           </box>
