@@ -1,8 +1,8 @@
 import { createSignal, createMemo, createResource, For, Show, onMount } from "solid-js"
 import { useTheme } from "../../context/theme"
-import { useDirectory } from "../../context/directory"
+import { useSync } from "@tui/context/sync"
 import { Installation } from "@/installation"
-import { readdirSync, statSync } from "fs"
+import { readdirSync, statSync, existsSync } from "fs"
 import path from "path"
 
 interface FileEntry {
@@ -24,6 +24,7 @@ function scanDirectory(dir: string, filter?: string, maxDepth = 2): FileEntry[] 
 
   function walk(currentDir: string, depth: number, relPath: string) {
     if (depth > maxDepth) return
+    if (entries.length > 500) return
     let items: string[]
     try {
       items = readdirSync(currentDir)
@@ -31,7 +32,6 @@ function scanDirectory(dir: string, filter?: string, maxDepth = 2): FileEntry[] 
       return
     }
 
-    // Separate dirs and files, sort each alphabetically
     const dirs: string[] = []
     const files: string[] = []
     for (const item of items) {
@@ -74,29 +74,44 @@ function scanDirectory(dir: string, filter?: string, maxDepth = 2): FileEntry[] 
 
 export function FileExplorer() {
   const { theme } = useTheme()
-  const directory = useDirectory()
+  const sync = useSync()
   const [filter, setFilter] = createSignal("")
-  const [depth, setDepth] = createSignal(2)
+
+  // Get the real directory path from sync (not the display version with ~ and branch)
+  const realDir = createMemo(() => {
+    const dir = sync.data.path.directory || process.cwd()
+    return dir.replace(/\\/g, "/")
+  })
+
+  // If user types a full path, use it; otherwise filter within the project dir
+  const targetDir = createMemo(() => {
+    const f = filter().trim()
+    if (f && (f.startsWith("/") || f.match(/^[A-Za-z]:/))) {
+      // Absolute path — browse that directory
+      const normalized = f.replace(/\\/g, "/")
+      if (existsSync(normalized)) return { dir: normalized, filter: undefined }
+    }
+    return { dir: realDir(), filter: f || undefined }
+  })
 
   const [entries, { refetch }] = createResource(
-    () => ({ dir: directory(), filter: filter(), depth: depth() }),
-    (opts) => scanDirectory(opts.dir, opts.filter || undefined, opts.depth),
+    () => targetDir(),
+    (opts) => scanDirectory(opts.dir, opts.filter, opts.filter ? 4 : 2),
     { initialValue: [] },
   )
 
   onMount(() => refetch())
 
   const dirName = createMemo(() => {
-    const parts = directory().replace(/\\/g, "/").split("/")
-    return parts[parts.length - 1] || directory()
+    const d = targetDir().dir
+    const parts = d.split("/")
+    return parts[parts.length - 1] || d
   })
 
   const fileCount = createMemo(() => entries().filter((e) => e.type === "file").length)
   const dirCount = createMemo(() => entries().filter((e) => e.type === "dir").length)
 
-  // Tree connector characters
   const connector = (entry: FileEntry, index: number, all: FileEntry[]) => {
-    // Find if this is the last entry at its depth level among siblings
     let isLast = true
     for (let i = index + 1; i < all.length; i++) {
       if (all[i].depth < entry.depth) break
@@ -129,9 +144,14 @@ export function FileExplorer() {
       </box>
 
       <box flexShrink={0} paddingBottom={1}>
-        <text fg={theme.textMuted}>
-          🔍 {filter() || "type to filter..."}
-        </text>
+        <input
+          onInput={(e) => setFilter(e)}
+          focusedBackgroundColor={theme.backgroundElement}
+          cursorColor={theme.primary}
+          focusedTextColor={theme.text}
+          textColor={theme.textMuted}
+          placeholder="🔍 filter or path..."
+        />
       </box>
 
       <scrollbox
@@ -161,9 +181,8 @@ export function FileExplorer() {
       </scrollbox>
 
       <box flexShrink={0} paddingTop={1}>
-        <text>
-          <span style={{ fg: theme.textMuted }}>{directory().replace(/\\/g, "/").split("/").slice(0, -1).join("/")}/</span>
-          <span style={{ fg: theme.text }}>{dirName()}</span>
+        <text fg={theme.textMuted} wrapMode="none">
+          {targetDir().dir}
         </text>
         <text fg={theme.textMuted}>
           <span style={{ fg: theme.success }}>•</span> <b>Open</b>
