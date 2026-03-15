@@ -3,7 +3,7 @@ import { useTheme } from "../../context/theme"
 import { useSync } from "@tui/context/sync"
 import { Installation } from "@/installation"
 import { readdirSync, statSync, existsSync } from "fs"
-import path from "path"
+import pathModule from "path"
 
 interface FileEntry {
   name: string
@@ -18,58 +18,63 @@ const IGNORE = new Set([
   ".idea", ".vscode", "obj", "bin", ".DS_Store",
 ])
 
-function scanDirectory(dir: string, filter?: string, maxDepth = 2): FileEntry[] {
-  const entries: FileEntry[] = []
-  const filterLower = filter?.toLowerCase()
-
-  function walk(currentDir: string, depth: number, relPath: string) {
-    if (depth > maxDepth) return
-    if (entries.length > 500) return
-    let items: string[]
-    try {
-      items = readdirSync(currentDir)
-    } catch {
-      return
-    }
-
-    const dirs: string[] = []
-    const files: string[] = []
-    for (const item of items) {
+function listDir(dir: string): { dirs: string[]; files: string[] } {
+  const dirs: string[] = []
+  const files: string[] = []
+  try {
+    for (const item of readdirSync(dir)) {
       if (item.startsWith(".") && item !== ".env") continue
       if (IGNORE.has(item)) continue
       try {
-        const fullPath = path.join(currentDir, item)
-        const stat = statSync(fullPath)
-        if (stat.isDirectory()) dirs.push(item)
+        const full = pathModule.join(dir, item)
+        if (statSync(full).isDirectory()) dirs.push(item)
         else files.push(item)
-      } catch {
-        continue
-      }
+      } catch {}
     }
+  } catch {}
+  dirs.sort((a, b) => a.localeCompare(b))
+  files.sort((a, b) => a.localeCompare(b))
+  return { dirs, files }
+}
 
-    dirs.sort((a, b) => a.localeCompare(b))
-    files.sort((a, b) => a.localeCompare(b))
+function scanCollapsed(dir: string): FileEntry[] {
+  // Show only root-level items (folders collapsed)
+  const { dirs, files } = listDir(dir)
+  const entries: FileEntry[] = []
+  for (const name of dirs) entries.push({ name, type: "dir", depth: 0, path: name })
+  for (const name of files) entries.push({ name, type: "file", depth: 0, path: name })
+  return entries
+}
 
-    for (const name of dirs) {
-      const rel = relPath ? `${relPath}/${name}` : name
-      if (!filterLower || rel.toLowerCase().includes(filterLower) || name.toLowerCase().includes(filterLower)) {
-        entries.push({ name, type: "dir", depth, path: rel })
-      }
-      walk(path.join(currentDir, name), depth + 1, rel)
-    }
+function scanExpanded(dir: string, folderName: string, maxDepth = 3): FileEntry[] {
+  const folderLower = folderName.toLowerCase()
+  const { dirs, files } = listDir(dir)
+  const entries: FileEntry[] = []
 
-    for (const name of files) {
-      const rel = relPath ? `${relPath}/${name}` : name
-      if (filterLower && !rel.toLowerCase().includes(filterLower) && !name.toLowerCase().includes(filterLower)) continue
-      entries.push({ name, type: "file", depth, path: rel })
+  for (const name of dirs) {
+    entries.push({ name, type: "dir", depth: 0, path: name })
+    // Expand folders that match the filter
+    if (name.toLowerCase().includes(folderLower)) {
+      walkInto(pathModule.join(dir, name), 1, name, maxDepth, entries)
     }
   }
-
-  try {
-    walk(dir, 0, "")
-  } catch {}
-
+  for (const name of files) {
+    entries.push({ name, type: "file", depth: 0, path: name })
+  }
   return entries
+}
+
+function walkInto(dir: string, depth: number, relPath: string, maxDepth: number, entries: FileEntry[]) {
+  if (depth > maxDepth || entries.length > 500) return
+  const { dirs, files } = listDir(dir)
+  for (const name of dirs) {
+    const rel = `${relPath}/${name}`
+    entries.push({ name, type: "dir", depth, path: rel })
+    walkInto(pathModule.join(dir, name), depth + 1, rel, maxDepth, entries)
+  }
+  for (const name of files) {
+    entries.push({ name, type: "file", depth, path: `${relPath}/${name}` })
+  }
 }
 
 export function FileExplorer() {
@@ -77,30 +82,28 @@ export function FileExplorer() {
   const sync = useSync()
   const [filter, setFilter] = createSignal("")
 
-  // Get the real directory path from sync (not the display version with ~ and branch)
   const realDir = createMemo(() => {
     const dir = sync.data.path.directory || process.cwd()
     return dir.replace(/\\/g, "/")
   })
 
-  // If user types a full path, use it; otherwise filter within the project dir
   const targetDir = createMemo(() => {
     const f = filter().trim()
     if (f && (f.startsWith("/") || f.match(/^[A-Za-z]:/))) {
-      // Absolute path — browse that directory
       const normalized = f.replace(/\\/g, "/")
-      if (existsSync(normalized)) return { dir: normalized, filter: undefined }
+      if (existsSync(normalized)) return { dir: normalized, filter: "" }
     }
-    return { dir: realDir(), filter: f || undefined }
+    return { dir: realDir(), filter: f }
   })
 
-  const [entries, { refetch }] = createResource(
+  const [entries] = createResource(
     () => targetDir(),
-    (opts) => scanDirectory(opts.dir, opts.filter, opts.filter ? 4 : 2),
+    (opts) => {
+      if (opts.filter) return scanExpanded(opts.dir, opts.filter)
+      return scanCollapsed(opts.dir)
+    },
     { initialValue: [] },
   )
-
-  onMount(() => refetch())
 
   const dirName = createMemo(() => {
     const d = targetDir().dir
@@ -120,8 +123,7 @@ export function FileExplorer() {
         break
       }
     }
-    const prefix = "  ".repeat(entry.depth)
-    return prefix + (isLast ? "└─" : "├─")
+    return "  ".repeat(entry.depth) + (isLast ? "└─" : "├─")
   }
 
   return (
@@ -136,10 +138,10 @@ export function FileExplorer() {
     >
       <box flexShrink={0} gap={0} paddingBottom={1}>
         <text fg={theme.text}>
-          <b>📁 File Explorer</b>
+          <b>📁 {dirName()}</b>
         </text>
         <text fg={theme.textMuted}>
-          {dirName()} · {fileCount()} files · {dirCount()} dirs
+          {fileCount()} files · {dirCount()} dirs
         </text>
       </box>
 
@@ -150,7 +152,7 @@ export function FileExplorer() {
           cursorColor={theme.primary}
           focusedTextColor={theme.text}
           textColor={theme.textMuted}
-          placeholder="🔍 filter or path..."
+          placeholder="🔍 folder name..."
         />
       </box>
 
