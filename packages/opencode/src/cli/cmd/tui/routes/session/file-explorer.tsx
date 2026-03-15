@@ -305,29 +305,28 @@ export function FileExplorer() {
           </Show>
           <For each={entries()}>
             {(entry, index) => (
-              <text
-                fg={entry.type === "dir" ? theme.accent : theme.textMuted}
-                wrapMode="none"
+              <box
+                flexDirection="row"
                 onMouseDown={(e) => {
-                  e.preventDefault()
-                }}
-                onMouseUp={(e) => {
                   e.stopPropagation()
-                  e.preventDefault()
-                  if (entry.type === "file") {
-                    const fullPath = pathModule.join(targetDir().dir, entry.path)
-                    dialog.setSize("large")
-                    dialog.replace(
-                      () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
-                    )
-                  } else {
+                  if (entry.type === "dir") {
                     toggleExpand(entry.path)
+                  } else {
+                    const fullPath = pathModule.join(targetDir().dir, entry.path)
+                    setTimeout(() => {
+                      dialog.setSize("large")
+                      dialog.replace(
+                        () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
+                      )
+                    }, 50)
                   }
                 }}
               >
-                {connector(entry, index(), entries())} {entry.type === "dir" ? "📁" : "📄"} {entry.name}
-                {entry.type === "dir" ? "/" : ""}
-              </text>
+                <text fg={entry.type === "dir" ? theme.accent : theme.textMuted} wrapMode="none">
+                  {connector(entry, index(), entries())} {entry.type === "dir" ? "📁" : "📄"} {entry.name}
+                  {entry.type === "dir" ? "/" : ""}
+                </text>
+              </box>
             )}
           </For>
         </box>
