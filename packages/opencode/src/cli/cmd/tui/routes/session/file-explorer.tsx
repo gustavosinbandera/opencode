@@ -121,10 +121,10 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
   })
 
   const dimensions = useTerminalDimensions()
-  const viewerWidth = createMemo(() => Math.min(dimensions().width - 10, 120))
-  const viewerHeight = createMemo(() => dimensions().height - 8)
-  const padTop = createMemo(() => Math.max(2, Math.floor((dimensions().height - viewerHeight()) / 2)))
-  const padLeft = createMemo(() => Math.max(2, Math.floor((dimensions().width - viewerWidth()) / 2)))
+  const w = createMemo(() => Math.min(dimensions().width - 8, 100))
+  const h = createMemo(() => Math.max(10, dimensions().height - 6))
+  const posTop = createMemo(() => Math.floor((dimensions().height - h()) / 2))
+  const posLeft = createMemo(() => Math.floor((dimensions().width - w()) / 2))
 
   // Prevent the click that opened the modal from immediately closing it
   let ready = false
@@ -142,10 +142,11 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
     >
       <box
         onMouseUp={(e) => e.stopPropagation()}
-        width={viewerWidth()}
-        height={viewerHeight()}
-        marginTop={padTop()}
-        marginLeft={padLeft()}
+        position="absolute"
+        width={w()}
+        height={h()}
+        top={posTop()}
+        left={posLeft()}
         backgroundColor={theme.backgroundPanel}
         paddingTop={1}
         paddingLeft={2}
