@@ -1,4 +1,4 @@
-import { createSignal, createMemo, createResource, For, Show } from "solid-js"
+import { createSignal, createMemo, For, Show } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { useTheme } from "../../context/theme"
 import { useSync } from "@tui/context/sync"
@@ -40,44 +40,31 @@ function listDir(dir: string): { dirs: string[]; files: string[] } {
   return { dirs, files }
 }
 
-function scanCollapsed(dir: string): FileEntry[] {
-  // Show only root-level items (folders collapsed)
-  const { dirs, files } = listDir(dir)
+function scanWithExpanded(dir: string, expandedSet: Set<string>, filter?: string): FileEntry[] {
   const entries: FileEntry[] = []
-  for (const name of dirs) entries.push({ name, type: "dir", depth: 0, path: name })
-  for (const name of files) entries.push({ name, type: "file", depth: 0, path: name })
-  return entries
-}
+  const filterLower = filter?.toLowerCase()
 
-function scanExpanded(dir: string, folderName: string, maxDepth = 3): FileEntry[] {
-  const folderLower = folderName.toLowerCase()
-  const { dirs, files } = listDir(dir)
-  const entries: FileEntry[] = []
+  function walk(currentDir: string, depth: number, relPath: string) {
+    if (entries.length > 500) return
+    const { dirs, files } = listDir(currentDir)
 
-  for (const name of dirs) {
-    entries.push({ name, type: "dir", depth: 0, path: name })
-    // Expand folders that match the filter
-    if (name.toLowerCase().includes(folderLower)) {
-      walkInto(pathModule.join(dir, name), 1, name, maxDepth, entries)
+    for (const name of dirs) {
+      const rel = relPath ? `${relPath}/${name}` : name
+      if (filterLower && !name.toLowerCase().includes(filterLower) && !rel.toLowerCase().includes(filterLower)) continue
+      entries.push({ name, type: "dir", depth, path: rel })
+      if (expandedSet.has(rel)) {
+        walk(pathModule.join(currentDir, name), depth + 1, rel)
+      }
+    }
+    for (const name of files) {
+      const rel = relPath ? `${relPath}/${name}` : name
+      if (filterLower && !name.toLowerCase().includes(filterLower) && !rel.toLowerCase().includes(filterLower)) continue
+      entries.push({ name, type: "file", depth, path: rel })
     }
   }
-  for (const name of files) {
-    entries.push({ name, type: "file", depth: 0, path: name })
-  }
-  return entries
-}
 
-function walkInto(dir: string, depth: number, relPath: string, maxDepth: number, entries: FileEntry[]) {
-  if (depth > maxDepth || entries.length > 500) return
-  const { dirs, files } = listDir(dir)
-  for (const name of dirs) {
-    const rel = `${relPath}/${name}`
-    entries.push({ name, type: "dir", depth, path: rel })
-    walkInto(pathModule.join(dir, name), depth + 1, rel, maxDepth, entries)
-  }
-  for (const name of files) {
-    entries.push({ name, type: "file", depth, path: `${relPath}/${name}` })
-  }
+  walk(dir, 0, "")
+  return entries
 }
 
 const MAX_PREVIEW_LINES = 200
@@ -208,7 +195,19 @@ export function FileExplorer() {
   const sync = useSync()
   const dialog = useDialog()
   const [filter, setFilter] = createSignal("")
+  const [expanded, setExpanded] = createSignal(new Set<string>())
+  const [version, setVersion] = createSignal(0)
   let inputRef: any
+
+  function toggleExpand(path: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+    setVersion((v) => v + 1)
+  }
 
   const realDir = createMemo(() => {
     const dir = sync.data.path.directory || process.cwd()
@@ -224,14 +223,11 @@ export function FileExplorer() {
     return { dir: realDir(), filter: f }
   })
 
-  const [entries] = createResource(
-    () => targetDir(),
-    (opts) => {
-      if (opts.filter) return scanExpanded(opts.dir, opts.filter)
-      return scanCollapsed(opts.dir)
-    },
-    { initialValue: [] },
-  )
+  const entries = createMemo(() => {
+    version() // track changes
+    const opts = targetDir()
+    return scanWithExpanded(opts.dir, expanded(), opts.filter || undefined)
+  })
 
   const dirName = createMemo(() => {
     const d = targetDir().dir
@@ -251,7 +247,12 @@ export function FileExplorer() {
         break
       }
     }
-    return "  ".repeat(entry.depth) + (isLast ? "└─" : "├─")
+    const prefix = "  ".repeat(entry.depth) + (isLast ? "└─" : "├─")
+    if (entry.type === "dir") {
+      const arrow = expanded().has(entry.path) ? "▼" : "▶"
+      return prefix + " " + arrow
+    }
+    return prefix
   }
 
   return (
@@ -299,7 +300,7 @@ export function FileExplorer() {
         <box flexShrink={0}>
           <Show when={entries().length === 0}>
             <text fg={theme.textMuted}>
-              {entries.loading ? "Scanning..." : "No files found"}
+              {"No files found"}
             </text>
           </Show>
           <For each={entries()}>
@@ -316,7 +317,7 @@ export function FileExplorer() {
                       () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
                     )
                   } else {
-                    setFilter(entry.name)
+                    toggleExpand(entry.path)
                   }
                 }}
               >
