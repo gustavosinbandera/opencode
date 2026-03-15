@@ -1,4 +1,5 @@
 import { createSignal, createMemo, createResource, For, Show } from "solid-js"
+import { useTerminalDimensions } from "@opentui/solid"
 import { useTheme } from "../../context/theme"
 import { useSync } from "@tui/context/sync"
 import { useDialog } from "../../ui/dialog"
@@ -127,6 +128,10 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
     return l
   })
 
+  // Dialog uses paddingTop = height/4, so available height = height * 3/4 - padding
+  const dimensions = useTerminalDimensions()
+  const scrollHeight = createMemo(() => Math.max(10, Math.floor(dimensions().height * 3 / 4) - 6))
+
   return (
     <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
       <box flexDirection="row" justifyContent="space-between">
@@ -135,9 +140,16 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
       </box>
       <text fg={theme.textMuted} wrapMode="none">{props.filePath}</text>
       <scrollbox
-        height={30}
+        height={scrollHeight()}
+        scrollX={true}
         verticalScrollbarOptions={{
           paddingLeft: 1,
+          trackOptions: {
+            backgroundColor: theme.background,
+            foregroundColor: theme.borderActive,
+          },
+        }}
+        horizontalScrollbarOptions={{
           trackOptions: {
             backgroundColor: theme.background,
             foregroundColor: theme.borderActive,
@@ -149,6 +161,7 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
           content={content()}
           drawUnstyledText={false}
           syntaxStyle={syntax()}
+          wrapMode="none"
         />
       </scrollbox>
     </box>
