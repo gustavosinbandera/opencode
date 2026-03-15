@@ -537,8 +537,11 @@ export function Autocomplete(props: {
       props.setPrompt((draft) => {
         draft.input = text
       })
-      show("/")
-      setStore("index", 0)
+      // Use queueMicrotask to ensure the input state is synced before reopening
+      queueMicrotask(() => {
+        show("/")
+        setStore("index", 0)
+      })
     }
   }
 
