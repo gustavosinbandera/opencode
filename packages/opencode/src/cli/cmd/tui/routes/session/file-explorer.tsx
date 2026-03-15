@@ -83,10 +83,13 @@ function getGitDiff(filePath: string, commits = 1): string {
     const { execSync } = require("child_process") as typeof import("child_process")
     const dir = pathModule.dirname(filePath)
     if (commits === 0) {
-      // Uncommitted changes: working tree vs HEAD
-      const diff = execSync(`git diff HEAD -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
+      // Compare working tree vs remote tracking branch
+      const branch = execSync(`git rev-parse --abbrev-ref HEAD`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
+      const remote = execSync(`git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo ""`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
+      const ref = remote || `origin/${branch}`
+      const diff = execSync(`git diff ${ref} -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
       if (diff) return diff
-      return "[No uncommitted changes]"
+      return `[No changes vs ${ref}]`
     }
     // What changed in the last N commits for this file
     const diff = execSync(`git diff HEAD~${commits}..HEAD -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
@@ -150,7 +153,7 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
 
   const tabs: { id: ViewMode; label: string }[] = [
     { id: "file", label: "📄 File" },
-    { id: "diff0", label: "± Uncommitted" },
+    { id: "diff0", label: "± vs Remote" },
     { id: "diff1", label: "~1" },
     { id: "diff2", label: "~2" },
     { id: "diff3", label: "~3" },
