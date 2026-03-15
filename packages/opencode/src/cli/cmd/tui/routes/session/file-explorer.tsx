@@ -77,23 +77,32 @@ const BINARY_EXTENSIONS = new Set([
 ])
 
 
-function getGitDiff(filePath: string): string {
+function getGitDiff(filePath: string, commits = 1): string {
   try {
     const { execSync } = require("child_process") as typeof import("child_process")
     const dir = pathModule.dirname(filePath)
-    const diff = execSync(`git diff HEAD -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
-    if (!diff) return "[No changes — file matches HEAD]"
-    return diff
+    // First try uncommitted changes
+    if (commits === 0) {
+      const diff = execSync(`git diff HEAD -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
+      if (diff) return diff
+      return "[No uncommitted changes]"
+    }
+    // Show diff for HEAD~N
+    const diff = execSync(`git diff HEAD~${commits} -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
+    if (diff) return diff
+    return `[No changes in last ${commits} commit${commits > 1 ? "s" : ""}]`
   } catch {
     return "[Not a git repository or git not available]"
   }
 }
 
+type ViewMode = "file" | "diff0" | "diff1" | "diff2" | "diff3" | "diff4"
+
 function FileViewer(props: { filePath: string; onClose: () => void }) {
   const { theme, syntax } = useTheme()
   const fileName = pathModule.basename(props.filePath)
   const ext = pathModule.extname(props.filePath).toLowerCase()
-  const [mode, setMode] = createSignal<"file" | "diff">("file")
+  const [mode, setMode] = createSignal<ViewMode>("file")
 
   const fileContent = createMemo(() => {
     if (BINARY_EXTENSIONS.has(ext)) {
@@ -121,12 +130,15 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
     }
   })
 
-  const diffContent = createMemo(() => getGitDiff(props.filePath))
-
-  const content = createMemo(() => mode() === "diff" ? diffContent() : fileContent())
+  const content = createMemo(() => {
+    const m = mode()
+    if (m === "file") return fileContent()
+    const commits = parseInt(m.replace("diff", ""))
+    return getGitDiff(props.filePath, commits)
+  })
 
   const lang = createMemo(() => {
-    if (mode() === "diff") return "diff"
+    if (mode() !== "file") return "diff"
     const l = LANGUAGE_EXTENSIONS[ext]
     if (!l) return ext.slice(1) || "text"
     if (["typescriptreact", "javascriptreact", "javascript"].includes(l)) return "typescript"
@@ -134,32 +146,39 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
   })
 
   const dimensions = useTerminalDimensions()
-  const scrollHeight = createMemo(() => Math.max(10, Math.floor(dimensions().height * 3 / 4) - 7))
+  const scrollHeight = createMemo(() => Math.max(10, Math.floor(dimensions().height * 3 / 4) - 8))
+
+  const tabs: { id: ViewMode; label: string }[] = [
+    { id: "file", label: "📄 File" },
+    { id: "diff0", label: "± Uncommitted" },
+    { id: "diff1", label: "~1" },
+    { id: "diff2", label: "~2" },
+    { id: "diff3", label: "~3" },
+    { id: "diff4", label: "~4" },
+  ]
 
   return (
     <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
       <box flexDirection="row" justifyContent="space-between">
         <text fg={theme.text}><b>📄 {fileName}</b></text>
-        <text fg={theme.textMuted}>esc to close</text>
+        <box onMouseDown={(e) => { e.stopPropagation(); props.onClose() }}>
+          <text><span style={{ fg: theme.accent, bold: true }}>✕ close</span></text>
+        </box>
       </box>
-      <box flexDirection="row" gap={2}>
-        <text
-          fg={mode() === "file" ? theme.text : theme.textMuted}
-          onMouseUp={(e) => { e.stopPropagation(); setMode("file") }}
-        >
-          <span style={{ fg: mode() === "file" ? theme.accent : theme.textMuted, bold: mode() === "file" }}>
-            📄 File
-          </span>
-        </text>
-        <text
-          fg={mode() === "diff" ? theme.text : theme.textMuted}
-          onMouseUp={(e) => { e.stopPropagation(); setMode("diff") }}
-        >
-          <span style={{ fg: mode() === "diff" ? theme.warning : theme.textMuted, bold: mode() === "diff" }}>
-            ± Diff
-          </span>
-        </text>
-        <text fg={theme.textMuted} wrapMode="none">{props.filePath}</text>
+      <text fg={theme.textMuted}>{props.filePath}</text>
+      <box flexDirection="row" gap={1}>
+        {tabs.map((tab) => (
+          <box onMouseDown={(e) => { e.stopPropagation(); setMode(tab.id) }}>
+            <text>
+              <span style={{
+                fg: mode() === tab.id ? (tab.id === "file" ? theme.accent : theme.warning) : theme.textMuted,
+                bold: mode() === tab.id,
+              }}>
+                {tab.label}
+              </span>
+            </text>
+          </box>
+        ))}
       </box>
       <scrollbox
         height={scrollHeight()}
