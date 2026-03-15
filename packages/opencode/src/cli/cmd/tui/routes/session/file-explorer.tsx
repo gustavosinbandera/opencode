@@ -170,18 +170,20 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
       </box>
       <text fg={theme.textMuted}>{props.filePath}</text>
       <box flexDirection="row" gap={1}>
-        {tabs.map((tab) => (
-          <box onMouseDown={(e) => { e.stopPropagation(); setMode(tab.id) }}>
-            <text>
-              <span style={{
-                fg: mode() === tab.id ? (tab.id === "file" ? theme.accent : theme.warning) : theme.textMuted,
-                bold: mode() === tab.id,
-              }}>
-                {tab.label}
-              </span>
-            </text>
-          </box>
-        ))}
+        <For each={tabs}>
+          {(tab) => (
+            <box onMouseDown={(e) => { e.stopPropagation(); setMode(tab.id) }}>
+              <text>
+                <span style={{
+                  fg: mode() === tab.id ? (tab.id === "file" ? theme.accent : theme.warning) : theme.textMuted,
+                  bold: mode() === tab.id,
+                }}>
+                  {tab.label}
+                </span>
+              </text>
+            </box>
+          )}
+        </For>
       </box>
       <scrollbox
         height={scrollHeight()}
