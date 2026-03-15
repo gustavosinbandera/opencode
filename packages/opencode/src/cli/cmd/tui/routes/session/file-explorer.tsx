@@ -1,8 +1,10 @@
 import { createSignal, createMemo, createResource, For, Show, onMount } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useSync } from "@tui/context/sync"
+import { useDialog } from "../../ui/dialog"
+import { Dialog } from "../../ui/dialog"
 import { Installation } from "@/installation"
-import { readdirSync, statSync, existsSync } from "fs"
+import { readdirSync, statSync, existsSync, readFileSync } from "fs"
 import pathModule from "path"
 
 interface FileEntry {
@@ -77,9 +79,79 @@ function walkInto(dir: string, depth: number, relPath: string, maxDepth: number,
   }
 }
 
+const MAX_PREVIEW_LINES = 200
+const BINARY_EXTENSIONS = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp",
+  ".mp3", ".mp4", ".wav", ".avi", ".mov", ".mkv",
+  ".zip", ".tar", ".gz", ".7z", ".rar",
+  ".exe", ".dll", ".so", ".dylib", ".wasm",
+  ".pdf", ".doc", ".docx", ".xls", ".xlsx",
+])
+
+function FileViewer(props: { filePath: string; onClose: () => void }) {
+  const { theme, syntax } = useTheme()
+  const fileName = pathModule.basename(props.filePath)
+  const ext = pathModule.extname(props.filePath).toLowerCase()
+
+  const content = createMemo(() => {
+    if (BINARY_EXTENSIONS.has(ext)) {
+      try {
+        const stat = statSync(props.filePath)
+        const size = stat.size > 1024 * 1024
+          ? `${(stat.size / 1024 / 1024).toFixed(1)} MB`
+          : stat.size > 1024
+            ? `${(stat.size / 1024).toFixed(1)} KB`
+            : `${stat.size} bytes`
+        return `[Binary file: ${size}]`
+      } catch {
+        return "[Cannot read file]"
+      }
+    }
+    try {
+      const raw = readFileSync(props.filePath, "utf-8")
+      const lines = raw.split("\n")
+      if (lines.length > MAX_PREVIEW_LINES) {
+        return lines.slice(0, MAX_PREVIEW_LINES).join("\n") + `\n\n… (${lines.length - MAX_PREVIEW_LINES} more lines)`
+      }
+      return raw
+    } catch {
+      return "[Cannot read file]"
+    }
+  })
+
+  return (
+    <Dialog onClose={props.onClose} size="large">
+      <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
+        <box flexDirection="row" justifyContent="space-between">
+          <text fg={theme.text}><b>📄 {fileName}</b></text>
+          <text fg={theme.textMuted}>esc to close</text>
+        </box>
+        <text fg={theme.textMuted} wrapMode="none">{props.filePath}</text>
+        <scrollbox
+          maxHeight={30}
+          verticalScrollbarOptions={{
+            trackOptions: {
+              backgroundColor: theme.background,
+              foregroundColor: theme.borderActive,
+            },
+          }}
+        >
+          <code
+            filetype={ext.slice(1) || "text"}
+            content={content()}
+            drawUnstyledText={false}
+            syntaxStyle={syntax()}
+          />
+        </scrollbox>
+      </box>
+    </Dialog>
+  )
+}
+
 export function FileExplorer() {
   const { theme } = useTheme()
   const sync = useSync()
+  const dialog = useDialog()
   const [filter, setFilter] = createSignal("")
   let inputRef: any
 
@@ -177,7 +249,21 @@ export function FileExplorer() {
           </Show>
           <For each={entries()}>
             {(entry, index) => (
-              <text fg={entry.type === "dir" ? theme.accent : theme.textMuted} wrapMode="none">
+              <text
+                fg={entry.type === "dir" ? theme.accent : theme.textMuted}
+                wrapMode="none"
+                onMouseDown={() => {
+                  if (entry.type === "file") {
+                    const fullPath = pathModule.join(targetDir().dir, entry.path)
+                    dialog.replace(
+                      () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
+                    )
+                  } else {
+                    // Click on folder → filter to it
+                    setFilter(entry.name)
+                  }
+                }}
+              >
                 {connector(entry, index(), entries())} {entry.type === "dir" ? "📁" : "📄"} {entry.name}
                 {entry.type === "dir" ? "/" : ""}
               </text>
