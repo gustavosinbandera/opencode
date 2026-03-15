@@ -62,6 +62,7 @@ import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { Sidebar } from "./sidebar"
+import { FileExplorer } from "./file-explorer"
 import { Flag } from "@/flag/flag"
 import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
 import parsers from "../../../../../../parsers-config.ts"
@@ -151,6 +152,7 @@ export function Session() {
   const dimensions = useTerminalDimensions()
   const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
+  const [sidebarMode, setSidebarMode] = kv.signal<"info" | "files">("sidebar_mode", "info")
   const [conceal, setConceal] = createSignal(true)
   const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)
   const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
@@ -578,6 +580,27 @@ export function Session() {
           setSidebar(() => (isVisible ? "hide" : "auto"))
           setSidebarOpen(!isVisible)
         })
+        dialog.clear()
+      },
+    },
+    {
+      title: sidebarMode() === "info" ? "Show file explorer" : "Show session info",
+      description: "Toggle sidebar between session info and file explorer",
+      value: "session.sidebar.mode",
+      keybind: "explorer_toggle",
+      category: "Session",
+      slash: {
+        name: "explorer",
+        aliases: ["files", "tree"],
+      },
+      onSelect: (dialog) => {
+        setSidebarMode((prev) => prev === "info" ? "files" : "info")
+        if (!sidebarVisible()) {
+          batch(() => {
+            setSidebar(() => "auto")
+            setSidebarOpen(true)
+          })
+        }
         dialog.clear()
       },
     },
@@ -1235,7 +1258,9 @@ export function Session() {
         <Show when={sidebarVisible()}>
           <Switch>
             <Match when={wide()}>
-              <Sidebar sessionID={route.sessionID} />
+              <Show when={sidebarMode() === "files"} fallback={<Sidebar sessionID={route.sessionID} />}>
+                <FileExplorer />
+              </Show>
             </Match>
             <Match when={!wide()}>
               <box
@@ -1247,7 +1272,9 @@ export function Session() {
                 alignItems="flex-end"
                 backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
               >
-                <Sidebar sessionID={route.sessionID} />
+                <Show when={sidebarMode() === "files"} fallback={<Sidebar sessionID={route.sessionID} />}>
+                  <FileExplorer />
+                </Show>
               </box>
             </Match>
           </Switch>
