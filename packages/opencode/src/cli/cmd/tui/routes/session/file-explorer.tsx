@@ -81,16 +81,16 @@ function getGitDiff(filePath: string, commits = 1): string {
   try {
     const { execSync } = require("child_process") as typeof import("child_process")
     const dir = pathModule.dirname(filePath)
-    // First try uncommitted changes
     if (commits === 0) {
+      // Uncommitted changes: working tree vs HEAD
       const diff = execSync(`git diff HEAD -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
       if (diff) return diff
       return "[No uncommitted changes]"
     }
-    // Show diff for HEAD~N
-    const diff = execSync(`git diff HEAD~${commits} -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
+    // What changed in the last N commits for this file
+    const diff = execSync(`git diff HEAD~${commits}..HEAD -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
     if (diff) return diff
-    return `[No changes in last ${commits} commit${commits > 1 ? "s" : ""}]`
+    return `[File not modified in last ${commits} commit${commits > 1 ? "s" : ""}]`
   } catch {
     return "[Not a git repository or git not available]"
   }
