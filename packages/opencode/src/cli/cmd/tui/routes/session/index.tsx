@@ -1679,7 +1679,7 @@ function DiagramView(props: ToolProps<any>) {
       }
     >
       <box paddingLeft={3} marginTop={1} flexShrink={0}>
-        <text fg={theme.accent}>{output()}</text>
+        <text fg={theme.text}>{output()}</text>
       </box>
     </Show>
   )
@@ -1698,7 +1698,7 @@ function TableView(props: ToolProps<any>) {
       }
     >
       <box paddingLeft={3} marginTop={1} flexShrink={0}>
-        <text fg={theme.accent}>{output()}</text>
+        <text fg={theme.text}>{output()}</text>
       </box>
     </Show>
   )
