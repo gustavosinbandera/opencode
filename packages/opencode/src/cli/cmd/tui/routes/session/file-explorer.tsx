@@ -2,8 +2,6 @@ import { createSignal, createMemo, createResource, For, Show, onMount } from "so
 import { useTheme } from "../../context/theme"
 import { useSync } from "@tui/context/sync"
 import { useDialog } from "../../ui/dialog"
-import { useTerminalDimensions } from "@opentui/solid"
-import { RGBA } from "@opentui/core"
 import { Installation } from "@/installation"
 import { readdirSync, statSync, existsSync, readFileSync } from "fs"
 import pathModule from "path"
@@ -120,62 +118,29 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
     }
   })
 
-  const dimensions = useTerminalDimensions()
-  const w = createMemo(() => Math.min(dimensions().width - 8, 100))
-  const h = createMemo(() => Math.max(10, dimensions().height - 6))
-  const posTop = createMemo(() => Math.floor((dimensions().height - h()) / 2))
-  const posLeft = createMemo(() => Math.floor((dimensions().width - w()) / 2))
-
-  // Prevent the click that opened the modal from immediately closing it
-  let ready = false
-  setTimeout(() => { ready = true }, 100)
-
   return (
-    <box
-      onMouseUp={() => { if (ready) props.onClose() }}
-      width={dimensions().width}
-      height={dimensions().height}
-      position="absolute"
-      left={0}
-      top={0}
-      backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
-    >
-      <box
-        onMouseUp={(e) => e.stopPropagation()}
-        position="absolute"
-        width={w()}
-        height={h()}
-        top={posTop()}
-        left={posLeft()}
-        backgroundColor={theme.backgroundPanel}
-        paddingTop={1}
-        paddingLeft={2}
-        paddingRight={2}
-        paddingBottom={1}
-        gap={1}
-      >
-        <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
-          <text fg={theme.text}><b>📄 {fileName}</b></text>
-          <text fg={theme.textMuted}>esc to close</text>
-        </box>
-        <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>{props.filePath}</text>
-        <scrollbox
-          flexGrow={1}
-          verticalScrollbarOptions={{
-            trackOptions: {
-              backgroundColor: theme.background,
-              foregroundColor: theme.borderActive,
-            },
-          }}
-        >
-          <code
-            filetype={ext.slice(1) || "text"}
-            content={content()}
-            drawUnstyledText={false}
-            syntaxStyle={syntax()}
-          />
-        </scrollbox>
+    <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
+      <box flexDirection="row" justifyContent="space-between">
+        <text fg={theme.text}><b>📄 {fileName}</b></text>
+        <text fg={theme.textMuted}>esc to close</text>
       </box>
+      <text fg={theme.textMuted} wrapMode="none">{props.filePath}</text>
+      <scrollbox
+        maxHeight={20}
+        verticalScrollbarOptions={{
+          trackOptions: {
+            backgroundColor: theme.background,
+            foregroundColor: theme.borderActive,
+          },
+        }}
+      >
+        <code
+          filetype={ext.slice(1) || "text"}
+          content={content()}
+          drawUnstyledText={false}
+          syntaxStyle={syntax()}
+        />
+      </scrollbox>
     </box>
   )
 }
@@ -287,6 +252,7 @@ export function FileExplorer() {
                 onMouseDown={() => {
                   if (entry.type === "file") {
                     const fullPath = pathModule.join(targetDir().dir, entry.path)
+                    dialog.setSize("large")
                     dialog.replace(
                       () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
                     )
