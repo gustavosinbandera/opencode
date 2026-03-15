@@ -311,14 +311,16 @@ export function FileExplorer() {
                   e.stopPropagation()
                   if (entry.type === "dir") {
                     toggleExpand(entry.path)
-                  } else {
+                  }
+                }}
+                onMouseUp={(e) => {
+                  e.stopPropagation()
+                  if (entry.type === "file") {
                     const fullPath = pathModule.join(targetDir().dir, entry.path)
-                    setTimeout(() => {
-                      dialog.setSize("large")
-                      dialog.replace(
-                        () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
-                      )
-                    }, 50)
+                    dialog.setSize("large")
+                    dialog.replace(
+                      () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
+                    )
                   }
                 }}
               >
