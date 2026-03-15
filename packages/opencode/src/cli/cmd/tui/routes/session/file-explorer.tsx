@@ -249,15 +249,18 @@ export function FileExplorer() {
               <text
                 fg={entry.type === "dir" ? theme.accent : theme.textMuted}
                 wrapMode="none"
-                onMouseDown={() => {
+                onMouseDown={(e) => {
+                  e.stopPropagation()
                   if (entry.type === "file") {
                     const fullPath = pathModule.join(targetDir().dir, entry.path)
-                    dialog.setSize("large")
-                    dialog.replace(
-                      () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
-                    )
+                    // Delay opening so the mouseUp from this click doesn't hit the Dialog backdrop
+                    setTimeout(() => {
+                      dialog.setSize("large")
+                      dialog.replace(
+                        () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
+                      )
+                    }, 50)
                   } else {
-                    // Click on folder → filter to it
                     setFilter(entry.name)
                   }
                 }}
