@@ -647,6 +647,24 @@ export function Session() {
       },
     },
     {
+      title: "GitHub explorer",
+      description: "Browse repos, issues, PRs, and search code on GitHub",
+      value: "session.github",
+      category: "Tools",
+      slash: {
+        name: "github",
+        aliases: ["gh", "repo"],
+      },
+      onSelect: (dialog) => {
+        dialog.clear()
+        const ref = promptRef.current
+        if (ref) {
+          ref.set({ input: "Use the github tool to: ", parts: [] })
+          ref.focus()
+        }
+      },
+    },
+    {
       title: "Toggle session scrollbar",
       value: "session.toggle.scrollbar",
       keybind: "scrollbar_toggle",
@@ -1650,6 +1668,9 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "table"}>
           <TableView {...toolprops} />
         </Match>
+        <Match when={props.part.tool === "github"}>
+          <GitHubView {...toolprops} />
+        </Match>
         <Match when={true}>
           <GenericTool {...toolprops} />
         </Match>
@@ -1694,6 +1715,26 @@ function TableView(props: ToolProps<any>) {
       fallback={
         <InlineTool icon="▦" pending="Building table..." complete={true} part={props.part}>
           table {input(props.input, ["headers", "rows"])}
+        </InlineTool>
+      }
+    >
+      <box paddingLeft={3} marginTop={1} flexShrink={0}>
+        <text fg={theme.text}>{output()}</text>
+      </box>
+    </Show>
+  )
+}
+
+function GitHubView(props: ToolProps<any>) {
+  const { theme } = useTheme()
+  const output = createMemo(() => props.output?.trim() ?? "")
+  const action = () => (props.input as any)?.action || "github"
+  return (
+    <Show
+      when={props.output}
+      fallback={
+        <InlineTool icon="" pending={`Fetching ${action()}...`} complete={true} part={props.part}>
+          github {input(props.input, ["action"])}
         </InlineTool>
       }
     >
