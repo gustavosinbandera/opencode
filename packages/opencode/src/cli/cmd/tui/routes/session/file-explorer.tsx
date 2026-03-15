@@ -128,23 +128,16 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
   })
 
   return (
-    <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1} flexGrow={1}>
-      <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
+    <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
+      <box flexDirection="row" justifyContent="space-between">
         <text fg={theme.text}><b>📄 {fileName}</b></text>
         <text fg={theme.textMuted}>esc to close</text>
       </box>
-      <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>{props.filePath}</text>
+      <text fg={theme.textMuted} wrapMode="none">{props.filePath}</text>
       <scrollbox
-        flexGrow={1}
-        scrollX={true}
+        height={30}
         verticalScrollbarOptions={{
           paddingLeft: 1,
-          trackOptions: {
-            backgroundColor: theme.background,
-            foregroundColor: theme.borderActive,
-          },
-        }}
-        horizontalScrollbarOptions={{
           trackOptions: {
             backgroundColor: theme.background,
             foregroundColor: theme.borderActive,
@@ -156,7 +149,6 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
           content={content()}
           drawUnstyledText={false}
           syntaxStyle={syntax()}
-          wrapMode="none"
         />
       </scrollbox>
     </box>
