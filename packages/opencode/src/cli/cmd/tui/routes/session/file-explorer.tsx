@@ -90,12 +90,25 @@ const BINARY_EXTENSIONS = new Set([
 ])
 
 
+function getGitDiff(filePath: string): string {
+  try {
+    const { execSync } = require("child_process") as typeof import("child_process")
+    const dir = pathModule.dirname(filePath)
+    const diff = execSync(`git diff HEAD -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
+    if (!diff) return "[No changes — file matches HEAD]"
+    return diff
+  } catch {
+    return "[Not a git repository or git not available]"
+  }
+}
+
 function FileViewer(props: { filePath: string; onClose: () => void }) {
   const { theme, syntax } = useTheme()
   const fileName = pathModule.basename(props.filePath)
   const ext = pathModule.extname(props.filePath).toLowerCase()
+  const [mode, setMode] = createSignal<"file" | "diff">("file")
 
-  const content = createMemo(() => {
+  const fileContent = createMemo(() => {
     if (BINARY_EXTENSIONS.has(ext)) {
       try {
         const stat = statSync(props.filePath)
@@ -121,16 +134,20 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
     }
   })
 
+  const diffContent = createMemo(() => getGitDiff(props.filePath))
+
+  const content = createMemo(() => mode() === "diff" ? diffContent() : fileContent())
+
   const lang = createMemo(() => {
+    if (mode() === "diff") return "diff"
     const l = LANGUAGE_EXTENSIONS[ext]
     if (!l) return ext.slice(1) || "text"
     if (["typescriptreact", "javascriptreact", "javascript"].includes(l)) return "typescript"
     return l
   })
 
-  // Dialog uses paddingTop = height/4, so available height = height * 3/4 - padding
   const dimensions = useTerminalDimensions()
-  const scrollHeight = createMemo(() => Math.max(10, Math.floor(dimensions().height * 3 / 4) - 6))
+  const scrollHeight = createMemo(() => Math.max(10, Math.floor(dimensions().height * 3 / 4) - 7))
 
   return (
     <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
@@ -138,7 +155,25 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
         <text fg={theme.text}><b>📄 {fileName}</b></text>
         <text fg={theme.textMuted}>esc to close</text>
       </box>
-      <text fg={theme.textMuted} wrapMode="none">{props.filePath}</text>
+      <box flexDirection="row" gap={2}>
+        <text
+          fg={mode() === "file" ? theme.text : theme.textMuted}
+          onMouseUp={(e) => { e.stopPropagation(); setMode("file") }}
+        >
+          <span style={{ fg: mode() === "file" ? theme.accent : theme.textMuted, bold: mode() === "file" }}>
+            📄 File
+          </span>
+        </text>
+        <text
+          fg={mode() === "diff" ? theme.text : theme.textMuted}
+          onMouseUp={(e) => { e.stopPropagation(); setMode("diff") }}
+        >
+          <span style={{ fg: mode() === "diff" ? theme.warning : theme.textMuted, bold: mode() === "diff" }}>
+            ± Diff
+          </span>
+        </text>
+        <text fg={theme.textMuted} wrapMode="none">{props.filePath}</text>
+      </box>
       <scrollbox
         height={scrollHeight()}
         scrollX={true}
