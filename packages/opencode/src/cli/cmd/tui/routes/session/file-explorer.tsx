@@ -1,4 +1,4 @@
-import { createSignal, createMemo, createResource, For, Show, onMount } from "solid-js"
+import { createSignal, createMemo, createResource, For, Show } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useSync } from "@tui/context/sync"
 import { useDialog } from "../../ui/dialog"
@@ -86,6 +86,7 @@ const BINARY_EXTENSIONS = new Set([
   ".exe", ".dll", ".so", ".dylib", ".wasm",
   ".pdf", ".doc", ".docx", ".xls", ".xlsx",
 ])
+
 
 function FileViewer(props: { filePath: string; onClose: () => void }) {
   const { theme, syntax } = useTheme()
@@ -249,17 +250,14 @@ export function FileExplorer() {
               <text
                 fg={entry.type === "dir" ? theme.accent : theme.textMuted}
                 wrapMode="none"
-                onMouseDown={(e) => {
+                onMouseUp={(e) => {
                   e.stopPropagation()
                   if (entry.type === "file") {
                     const fullPath = pathModule.join(targetDir().dir, entry.path)
-                    // Delay opening so the mouseUp from this click doesn't hit the Dialog backdrop
-                    setTimeout(() => {
-                      dialog.setSize("large")
-                      dialog.replace(
-                        () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
-                      )
-                    }, 50)
+                    dialog.setSize("large")
+                    dialog.replace(
+                      () => <FileViewer filePath={fullPath} onClose={() => dialog.clear()} />,
+                    )
                   } else {
                     setFilter(entry.name)
                   }
