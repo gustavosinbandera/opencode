@@ -1474,7 +1474,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
           fg={theme.textMuted}
         />
         <Show when={overflow()}>
-          <text fg={theme.textMuted}>{expanded() ? "[↑ mostrar menos]" : "[↓ mostrar más]"}</text>
+          <text><span style={{ fg: theme.expandCollapse, bold: true }}>{expanded() ? "▲ mostrar menos" : "▼ mostrar más"}</span></text>
         </Show>
       </box>
     </Show>
@@ -1535,7 +1535,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
           </Match>
         </Switch>
         <Show when={overflow()}>
-          <text fg={theme.textMuted}>{expanded() ? "[↑ mostrar menos]" : "[↓ mostrar más]"}</text>
+          <text><span style={{ fg: theme.expandCollapse, bold: true }}>{expanded() ? "▲ mostrar menos" : "▼ mostrar más"}</span></text>
         </Show>
       </box>
     </Show>
@@ -1672,7 +1672,7 @@ function GenericTool(props: ToolProps<any>) {
         <box gap={1}>
           <text fg={theme.text}>{limited()}</text>
           <Show when={overflow()}>
-            <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+            <text><span style={{ fg: theme.expandCollapse, bold: true }}>{expanded() ? "▲ mostrar menos" : "▼ mostrar más"}</span></text>
           </Show>
         </box>
       </BlockTool>
@@ -2327,7 +2327,11 @@ function input(input: Record<string, any>, omit?: string[]): string {
     return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
   })
   if (primitives.length === 0) return ""
-  return `[${primitives.map(([key, value]) => `${key}=${value}`).join(", ")}]`
+  return `[${primitives.map(([key, value]) => {
+    const str = String(value)
+    const truncated = str.length > 80 ? str.slice(0, 80) + "…" : str
+    return `${key}=${truncated.replace(/\n/g, " ")}`
+  }).join(", ")}]`
 }
 
 function filetype(input?: string) {

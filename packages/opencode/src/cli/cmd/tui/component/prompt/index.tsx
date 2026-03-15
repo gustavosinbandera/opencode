@@ -1436,17 +1436,17 @@ function VuMeter() {
 
   return (
     <text>
-      <span style={{ fg: voice.recording() ? theme.error : theme.textMuted }}>●</span>
+      <span style={{ fg: voice.recording() ? theme.micActive : theme.micInactive }}>●</span>
       {" "}
-      <span style={{ fg: voice.recording() ? theme.success : theme.textMuted }}>mic</span>
+      <span style={{ fg: voice.recording() ? theme.micLabel : theme.micInactive }}>mic</span>
       {" "}
       {Array.from({ length: DOT_COUNT }, (_, i) => {
         const on = () => i < filled()
         const c = () => {
-          if (!voice.recording() || !on()) return theme.textMuted
-          if (i >= 8) return theme.error
-          if (i >= 5) return theme.warning
-          return theme.success
+          if (!voice.recording() || !on()) return theme.micInactive
+          if (i >= 8) return theme.vuHigh
+          if (i >= 5) return theme.vuMid
+          return theme.vuLow
         }
         return <span style={{ fg: c() }}>{on() && voice.recording() ? "●" : "·"}</span>
       })}

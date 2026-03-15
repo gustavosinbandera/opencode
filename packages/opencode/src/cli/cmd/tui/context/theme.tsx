@@ -96,6 +96,14 @@ type ThemeColors = {
   syntaxType: RGBA
   syntaxOperator: RGBA
   syntaxPunctuation: RGBA
+  // Voice & UI indicators
+  micActive: RGBA
+  micInactive: RGBA
+  micLabel: RGBA
+  vuLow: RGBA
+  vuMid: RGBA
+  vuHigh: RGBA
+  expandCollapse: RGBA
 }
 
 type Theme = ThemeColors & {
@@ -131,10 +139,17 @@ type ColorValue = HexColor | RefName | Variant | RGBA
 type ThemeJson = {
   $schema?: string
   defs?: Record<string, HexColor | RefName>
-  theme: Omit<Record<keyof ThemeColors, ColorValue>, "selectedListItemText" | "backgroundMenu"> & {
+  theme: Omit<Record<keyof ThemeColors, ColorValue>, "selectedListItemText" | "backgroundMenu" | "micActive" | "micInactive" | "micLabel" | "vuLow" | "vuMid" | "vuHigh" | "expandCollapse"> & {
     selectedListItemText?: ColorValue
     backgroundMenu?: ColorValue
     thinkingOpacity?: number
+    micActive?: ColorValue
+    micInactive?: ColorValue
+    micLabel?: ColorValue
+    vuLow?: ColorValue
+    vuMid?: ColorValue
+    vuHigh?: ColorValue
+    expandCollapse?: ColorValue
   }
 }
 
@@ -224,6 +239,15 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
 
   // Handle thinkingOpacity - optional with default of 0.6
   const thinkingOpacity = theme.theme.thinkingOpacity ?? 0.6
+
+  // Voice & UI indicator defaults — derived from theme palette
+  if (!resolved.micActive) resolved.micActive = resolved.error!
+  if (!resolved.micInactive) resolved.micInactive = resolved.textMuted!
+  if (!resolved.micLabel) resolved.micLabel = resolved.success!
+  if (!resolved.vuLow) resolved.vuLow = resolved.success!
+  if (!resolved.vuMid) resolved.vuMid = resolved.warning!
+  if (!resolved.vuHigh) resolved.vuHigh = resolved.error!
+  if (!resolved.expandCollapse) resolved.expandCollapse = resolved.accent!
 
   return {
     ...resolved,
@@ -530,6 +554,14 @@ function generateSystem(colors: TerminalColors, mode: "dark" | "light"): ThemeJs
       syntaxType: ansiColors.cyan,
       syntaxOperator: ansiColors.cyan,
       syntaxPunctuation: fg,
+      // Voice & UI indicators — derived from theme palette
+      micActive: ansiColors.red,
+      micInactive: textMuted,
+      micLabel: ansiColors.green,
+      vuLow: ansiColors.green,
+      vuMid: ansiColors.yellow,
+      vuHigh: ansiColors.red,
+      expandCollapse: ansiColors.cyan,
     },
   }
 }
