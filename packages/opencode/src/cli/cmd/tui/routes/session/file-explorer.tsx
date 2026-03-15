@@ -5,6 +5,7 @@ import { useDialog } from "../../ui/dialog"
 import { Installation } from "@/installation"
 import { readdirSync, statSync, existsSync, readFileSync } from "fs"
 import pathModule from "path"
+import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
 
 interface FileEntry {
   name: string
@@ -119,17 +120,25 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
     }
   })
 
+  const lang = createMemo(() => {
+    const l = LANGUAGE_EXTENSIONS[ext]
+    if (!l) return ext.slice(1) || "text"
+    if (["typescriptreact", "javascriptreact", "javascript"].includes(l)) return "typescript"
+    return l
+  })
+
   return (
-    <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
+    <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1} flexGrow={1}>
+      <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
         <text fg={theme.text}><b>📄 {fileName}</b></text>
         <text fg={theme.textMuted}>esc to close</text>
       </box>
-      <text fg={theme.textMuted} wrapMode="none">{props.filePath}</text>
+      <text fg={theme.textMuted} wrapMode="none" flexShrink={0}>{props.filePath}</text>
       <scrollbox
-        maxHeight={20}
+        flexGrow={1}
         scrollX={true}
         verticalScrollbarOptions={{
+          paddingLeft: 1,
           trackOptions: {
             backgroundColor: theme.background,
             foregroundColor: theme.borderActive,
@@ -143,10 +152,11 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
         }}
       >
         <code
-          filetype={ext.slice(1) || "text"}
+          filetype={lang()}
           content={content()}
           drawUnstyledText={false}
           syntaxStyle={syntax()}
+          wrapMode="none"
         />
       </scrollbox>
     </box>
