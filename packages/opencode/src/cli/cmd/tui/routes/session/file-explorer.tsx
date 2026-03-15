@@ -81,6 +81,7 @@ export function FileExplorer() {
   const { theme } = useTheme()
   const sync = useSync()
   const [filter, setFilter] = createSignal("")
+  let inputRef: any
 
   const realDir = createMemo(() => {
     const dir = sync.data.path.directory || process.cwd()
@@ -145,7 +146,7 @@ export function FileExplorer() {
         </text>
       </box>
 
-      <box flexShrink={0} paddingBottom={1}>
+      <box flexShrink={0} paddingBottom={1} onMouseDown={() => inputRef?.focus()}>
         <input
           onInput={(e) => setFilter(e)}
           focusedBackgroundColor={theme.backgroundElement}
@@ -153,6 +154,9 @@ export function FileExplorer() {
           focusedTextColor={theme.text}
           textColor={theme.textMuted}
           placeholder="🔍 folder name..."
+          ref={(r) => {
+            inputRef = r
+          }}
         />
       </box>
 
