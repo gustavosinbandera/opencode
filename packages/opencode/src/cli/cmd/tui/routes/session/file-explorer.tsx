@@ -93,17 +93,23 @@ function getGitDiff(filePath: string, commits = 1): string {
   try {
     const { execSync } = require("child_process") as typeof import("child_process")
     const dir = pathModule.dirname(filePath)
+    const run = (cmd: string) => execSync(cmd, { encoding: "utf-8", cwd: dir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] }).trim()
+
     if (commits === 0) {
       // Compare working tree vs remote tracking branch
-      const branch = execSync(`git rev-parse --abbrev-ref HEAD`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
-      const remote = execSync(`git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo ""`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
-      const ref = remote || `origin/${branch}`
-      const diff = execSync(`git diff ${ref} -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
-      if (diff) return diff
-      return `[No changes vs ${ref}]`
+      const branch = run(`git rev-parse --abbrev-ref HEAD`)
+      let ref = `origin/${branch}`
+      try { ref = run(`git rev-parse --abbrev-ref --symbolic-full-name @{u}`) || ref } catch {}
+      try {
+        const diff = run(`git diff ${ref} -- "${filePath}"`)
+        if (diff) return diff
+        return `[No changes vs ${ref}]`
+      } catch {
+        return `[Cannot compare vs ${ref}]`
+      }
     }
     // What changed in the last N commits for this file
-    const diff = execSync(`git diff HEAD~${commits}..HEAD -- "${filePath}"`, { encoding: "utf-8", cwd: dir, timeout: 5000 }).trim()
+    const diff = run(`git diff HEAD~${commits}..HEAD -- "${filePath}"`)
     if (diff) return diff
     return `[File not modified in last ${commits} commit${commits > 1 ? "s" : ""}]`
   } catch {
