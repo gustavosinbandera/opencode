@@ -629,6 +629,24 @@ export function Session() {
       },
     },
     {
+      title: "Draw ASCII diagram",
+      description: "Use the diagram tool to draw a flow/architecture diagram inline",
+      value: "session.diagram",
+      category: "Tools",
+      slash: {
+        name: "diagram",
+        aliases: ["draw", "flow"],
+      },
+      onSelect: (dialog) => {
+        dialog.clear()
+        const ref = promptRef.current
+        if (ref) {
+          ref.set({ input: "Use the diagram tool to draw: ", parts: [] })
+          ref.focus()
+        }
+      },
+    },
+    {
       title: "Toggle session scrollbar",
       value: "session.toggle.scrollbar",
       keybind: "scrollbar_toggle",
@@ -1626,6 +1644,12 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "skill"}>
           <Skill {...toolprops} />
         </Match>
+        <Match when={props.part.tool === "diagram"}>
+          <DiagramView {...toolprops} />
+        </Match>
+        <Match when={props.part.tool === "table"}>
+          <TableView {...toolprops} />
+        </Match>
         <Match when={true}>
           <GenericTool {...toolprops} />
         </Match>
@@ -1642,6 +1666,44 @@ type ToolProps<T extends Tool.Info> = {
   output?: string
   part: ToolPart
 }
+function DiagramView(props: ToolProps<any>) {
+  const { theme } = useTheme()
+  const output = createMemo(() => props.output?.trim() ?? "")
+  return (
+    <Show
+      when={props.output}
+      fallback={
+        <InlineTool icon="◨" pending="Drawing diagram..." complete={true} part={props.part}>
+          diagram {input(props.input, ["nodes", "edges"])}
+        </InlineTool>
+      }
+    >
+      <box paddingLeft={3} marginTop={1} flexShrink={0}>
+        <text fg={theme.accent}>{output()}</text>
+      </box>
+    </Show>
+  )
+}
+
+function TableView(props: ToolProps<any>) {
+  const { theme } = useTheme()
+  const output = createMemo(() => props.output?.trim() ?? "")
+  return (
+    <Show
+      when={props.output}
+      fallback={
+        <InlineTool icon="▦" pending="Building table..." complete={true} part={props.part}>
+          table {input(props.input, ["headers", "rows"])}
+        </InlineTool>
+      }
+    >
+      <box paddingLeft={3} marginTop={1} flexShrink={0}>
+        <text fg={theme.accent}>{output()}</text>
+      </box>
+    </Show>
+  )
+}
+
 function GenericTool(props: ToolProps<any>) {
   const { theme } = useTheme()
   const ctx = use()
