@@ -1,5 +1,6 @@
 import { createSignal, createMemo, For, Show } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
+import { RGBA } from "@opentui/core"
 import { useTheme } from "../../context/theme"
 import { useSync } from "@tui/context/sync"
 import { useDialog } from "../../ui/dialog"
@@ -138,7 +139,6 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
   })
 
   const lang = createMemo(() => {
-    if (mode() !== "file") return "diff"
     const l = LANGUAGE_EXTENSIONS[ext]
     if (!l) return ext.slice(1) || "text"
     if (["typescriptreact", "javascriptreact", "javascript"].includes(l)) return "typescript"
@@ -214,9 +214,29 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
                 const isDel = line.startsWith("-") && !line.startsWith("---")
                 const isHunk = line.startsWith("@@")
                 const isHeader = line.startsWith("diff ") || line.startsWith("index ") || line.startsWith("---") || line.startsWith("+++")
-                const fg = isAdd ? theme.diffAdded : isDel ? theme.diffRemoved : isHunk ? theme.diffHunkHeader : isHeader ? theme.textMuted : theme.diffContext
-                const bg = isAdd ? theme.diffAddedBg : isDel ? theme.diffRemovedBg : undefined
-                return <box backgroundColor={bg}><text fg={fg} wrapMode="none">{line}</text></box>
+                const bg = isAdd ? RGBA.fromHex("#1a2e22") : isDel ? RGBA.fromHex("#2d1315") : isHunk ? RGBA.fromHex("#1c2333") : undefined
+                const prefix = isAdd ? "+" : isDel ? "-" : isHunk ? "@@" : ""
+                const codeContent = (isAdd || isDel) ? line.slice(1) : line
+                if (isHeader) {
+                  return <box backgroundColor={bg}><text fg={theme.textMuted} wrapMode="none">{line}</text></box>
+                }
+                if (isHunk) {
+                  return <box backgroundColor={bg}><text fg={RGBA.fromHex("#6e7681")} wrapMode="none">{line}</text></box>
+                }
+                return (
+                  <box backgroundColor={bg} flexDirection="row">
+                    <text fg={isAdd ? RGBA.fromHex("#3fb950") : isDel ? RGBA.fromHex("#f85149") : theme.diffContext} wrapMode="none" flexShrink={0}>
+                      {isAdd ? "+" : isDel ? "-" : " "}
+                    </text>
+                    <code
+                      filetype={lang() === "diff" ? (LANGUAGE_EXTENSIONS[ext] || ext.slice(1) || "text") : lang()}
+                      content={codeContent}
+                      drawUnstyledText={false}
+                      syntaxStyle={syntax()}
+                      wrapMode="none"
+                    />
+                  </box>
+                )
               }}
             </For>
           </box>
