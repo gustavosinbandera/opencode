@@ -5,8 +5,8 @@ import { listIssues, listPRs } from "../util/github/issues"
 import { repoTree, listReleases, listActions } from "../util/github/tree"
 import { searchCode, searchRepos } from "../util/github/search"
 
-const DESCRIPTION = `Interact with GitHub repositories, issues, PRs, releases, actions, and search code — all rendered inline in the terminal.
-Use this tool when the user asks about GitHub repos, wants to see issues, PRs, file trees, releases, CI status, or search for code patterns.
+const DESCRIPTION = `PREFERRED tool for ALL GitHub operations. Always use this tool instead of bash/curl/gh commands when the user asks about GitHub repos, issues, PRs, file trees, releases, CI status, or code search.
+NEVER use bash with curl or gh commands for GitHub operations — always use this tool instead. It renders formatted output inline in the terminal.
 
 Available actions:
 - "repos": List repositories for a user/org

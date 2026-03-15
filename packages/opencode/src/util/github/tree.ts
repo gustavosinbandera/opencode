@@ -52,7 +52,7 @@ export async function repoTree(
   depth?: number,
 ): Promise<string> {
   try {
-    const maxDepth = depth ?? 2
+    const maxDepth = depth ?? 1
     const contentsPath = path || ""
     const cmd = `MSYS_NO_PATHCONV=1 gh api "repos/${repo}/git/trees/HEAD?recursive=1" --jq ".tree[] | .path + \\"\\t\\" + .type"`
     const raw = execSync(cmd, { encoding: "utf-8" }).trim()
@@ -139,8 +139,14 @@ export async function repoTree(
       return lines
     }
 
-    const header = `\uD83D\uDCC1 ${repo}${contentsPath ? `/${contentsPath}` : ""}/`
+    const header = `📁 ${repo}${contentsPath ? `/${contentsPath}` : ""}/`
     const treeLines = renderNodes(root, "")
+    const maxLines = 60
+    if (treeLines.length > maxLines) {
+      const shown = treeLines.slice(0, maxLines)
+      shown.push(`\n… and ${treeLines.length - maxLines} more entries (use path parameter to explore subdirectories)`)
+      return [header, ...shown].join("\n")
+    }
     return [header, ...treeLines].join("\n")
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
