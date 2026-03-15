@@ -82,7 +82,7 @@ type ViewMode = "file" | "diff0" | "diff1" | "diff2" | "diff3" | "diff4"
 
 const VIEWER_TABS: { id: ViewMode; label: string }[] = [
   { id: "file", label: "📄 File" },
-  { id: "diff0", label: "± vs Remote" },
+  { id: "diff0", label: "± vs Main" },
   { id: "diff1", label: "~1" },
   { id: "diff2", label: "~2" },
   { id: "diff3", label: "~3" },
@@ -96,10 +96,11 @@ function getGitDiff(filePath: string, commits = 1): string {
     const run = (cmd: string) => execSync(cmd, { encoding: "utf-8", cwd: dir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] }).trim()
 
     if (commits === 0) {
-      // Compare working tree vs remote tracking branch
-      const branch = run(`git rev-parse --abbrev-ref HEAD`)
-      let ref = `origin/${branch}`
-      try { ref = run(`git rev-parse --abbrev-ref --symbolic-full-name @{u}`) || ref } catch {}
+      // Compare working tree vs main branch (shows all branch changes)
+      let ref = "origin/main"
+      try { ref = run(`git rev-parse --verify origin/main`) ? "origin/main" : "origin/master" } catch {
+        try { run(`git rev-parse --verify origin/master`); ref = "origin/master" } catch { ref = "HEAD" }
+      }
       try {
         const diff = run(`git diff ${ref} -- "${filePath}"`)
         if (diff) return diff
