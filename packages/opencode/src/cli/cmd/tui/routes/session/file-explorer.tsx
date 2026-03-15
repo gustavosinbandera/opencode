@@ -128,7 +128,14 @@ function FileViewer(props: { filePath: string; onClose: () => void }) {
       <text fg={theme.textMuted} wrapMode="none">{props.filePath}</text>
       <scrollbox
         maxHeight={20}
+        scrollX={true}
         verticalScrollbarOptions={{
+          trackOptions: {
+            backgroundColor: theme.background,
+            foregroundColor: theme.borderActive,
+          },
+        }}
+        horizontalScrollbarOptions={{
           trackOptions: {
             backgroundColor: theme.background,
             foregroundColor: theme.borderActive,
